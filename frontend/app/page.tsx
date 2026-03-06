@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useI18n, useAuth, useCompany, Company } from "./i18n";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 
@@ -10,6 +11,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const router = useRouter();
+  const { t } = useI18n();
+  const { setPerms } = useAuth();
+  const { setCompany } = useCompany();
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -21,14 +25,29 @@ export default function LoginPage() {
         body: JSON.stringify({ username, password }),
       });
       if (!res.ok) {
-        setError("Invalid username or password");
+        setError(t("invalidCredentials"));
         return;
       }
       const data = await res.json();
       localStorage.setItem("token", data.token);
+      setPerms({
+        username: data.username,
+        is_admin: data.is_admin,
+        company_access: data.company_access,
+        can_manage_products: data.can_manage_products,
+        can_edit_pending: data.can_edit_pending,
+        can_delete_pending: data.can_delete_pending,
+        can_edit_events: data.can_edit_events,
+        can_delete_events: data.can_delete_events,
+        can_set_suggested_action: data.can_set_suggested_action,
+        can_mark_addressed: data.can_mark_addressed,
+        can_edit_addressed: data.can_edit_addressed,
+        can_delete_addressed: data.can_delete_addressed,
+      });
+      setCompany(data.company_access as Company);
       router.push("/dashboard");
     } catch {
-      setError("Could not connect to server");
+      setError(t("serverError"));
     }
   }
 
@@ -40,7 +59,7 @@ export default function LoginPage() {
       >
         <h1 className="text-2xl font-bold text-center">QC Inspector</h1>
         <div>
-          <label className="block text-sm font-medium mb-1">Username</label>
+          <label className="block text-sm font-medium mb-1">{t("username")}</label>
           <input
             type="text"
             value={username}
@@ -50,7 +69,7 @@ export default function LoginPage() {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">Password</label>
+          <label className="block text-sm font-medium mb-1">{t("password")}</label>
           <input
             type="password"
             value={password}
@@ -64,7 +83,7 @@ export default function LoginPage() {
           type="submit"
           className="w-full bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700"
         >
-          Sign In
+          {t("signIn")}
         </button>
       </form>
     </div>

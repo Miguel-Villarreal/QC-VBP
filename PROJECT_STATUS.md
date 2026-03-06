@@ -1,8 +1,8 @@
 # QC Inspector - Project Status
 
-## Current State: Step 1 Complete
+## Current State: Steps 1-4 Complete + Company, i18n, PDF, User Management, Failed Events Workflow, Suppliers, Pagination, Sorting
 
-Step 1 (Build Initial Testable Instance) from `plan.md` is fully complete. The app runs locally without persistence (in-memory backend). Ready to proceed to Step 2 (AQL Research).
+Steps 1 through 4 from `plan.md` are complete. The app has a working AQL engine based on ANSI/ASQ Z1.4 with corrected values from the official standard. Additional features added: multi-company support (VBC/VBP/All), English/Spanish language toggle, PDF export with Pass/Fail, user tracking on records, user management with granular permissions, failed events lifecycle (suggested actions, awaiting fix, addressed), number formatting with commas, company logos in nav bar, supplier field on products (admin-configurable, REPORT VARIABLE), pagination on all event sections (10/20/50 per page), and sortable column headers on all event tables. Ready to proceed to Step 5 (Google Sheets integration).
 
 ---
 
@@ -10,7 +10,9 @@ Step 1 (Build Initial Testable Instance) from `plan.md` is fully complete. The a
 
 - **Frontend**: Next.js 15 (App Router) + React 19 + Tailwind CSS v4 -- dev server on port 3000
 - **Backend**: Python FastAPI with in-memory dicts -- runs on port 8001
-- **Auth**: Hardcoded credentials (user/password), token stored in localStorage
+- **Auth**: In-memory user store. Default admin: user/password. Admin can add/delete users with granular permissions. Token + permissions stored in localStorage
+- **i18n**: English/Spanish toggle via React Context, persisted in localStorage. PDFs also respect language setting.
+- **Company**: Multi-company support (VBC, VBP, All). Each product/event/pending inspection is tagged with companies. Dropdown in nav bar filters all views and creates. Users with restricted company_access see only their company (no dropdown).
 - **No persistence**: All data resets on backend restart
 
 ---
@@ -45,12 +47,21 @@ Login: username `user`, password `password`
 | `AGENTS.md` | Business requirements and coding standards |
 | `plan.md` | 6-step development plan with milestones and tests |
 | `PROJECT_STATUS.md` | This file |
+| `AQL_TABLES.md` | Human-readable AQL reference tables (verified against standard) |
+| `AQL Chart.xlsx` | User-provided spreadsheet with correct Ac/Re values (source of truth) |
+| `Event Display Output Template.pdf` | **Template for single-event PDF export** -- when updated, code must be updated to match (see PDF Export section) |
+| `VB Packaging Logo.JPG` | Company logo (copy also at `backend/data/logo.jpg`) |
+| `frontend/public/logo_VBC.png` | VBC logo for nav bar |
+| `frontend/public/logo_VBP.jpg` | VBP logo for nav bar |
 
 ### Backend (`backend/`)
 | File | Purpose |
 |------|---------|
-| `main.py` | Entire FastAPI application (190 lines) |
-| `requirements.txt` | Python deps: `fastapi`, `uvicorn[standard]` |
+| `main.py` | FastAPI application (~750 lines) |
+| `aql.py` | AQL lookup utility (code letter, sample size, accept/reject) |
+| `data/aql_table.json` | Machine-readable AQL tables (from ANSI/ASQ Z1.4) |
+| `test_aql.py` | Unit tests for AQL lookups (5 tests) |
+| `requirements.txt` | Python deps: `fastapi`, `uvicorn[standard]`, `reportlab` |
 
 ### Frontend (`frontend/`)
 | File | Purpose |
@@ -60,12 +71,15 @@ Login: username `user`, password `password`
 | `next.config.ts` | Empty config (defaults) |
 | `postcss.config.mjs` | Tailwind via `@tailwindcss/postcss` |
 | `app/globals.css` | Single line: `@import "tailwindcss"` |
-| `app/layout.tsx` | Root layout, page title "QC Inspector" |
-| `app/page.tsx` | Login page (username/password form) |
-| `app/dashboard/layout.tsx` | Nav bar with "Master List" and "Events" tabs, auth check, sign out |
+| `app/i18n.tsx` | i18n system (~290 lines, translations, I18nProvider, CompanyProvider, AuthProvider, useI18n, useCompany, useAuth hooks) |
+| `app/providers.tsx` | Client wrapper combining I18nProvider + AuthProvider + CompanyProvider |
+| `app/layout.tsx` | Root layout, page title "QC Inspector", wraps children with Providers |
+| `app/page.tsx` | Login page (username/password form, translated, sets company on login) |
+| `app/dashboard/layout.tsx` | Nav bar with tabs, company dropdown (or static label if restricted), language dropdown, auth check, sign out |
 | `app/dashboard/page.tsx` | Redirects to `/dashboard/products` |
-| `app/dashboard/products/page.tsx` | Master List CRUD (add/remove products) |
-| `app/dashboard/events/page.tsx` | Main events page (~687 lines, most complex file) |
+| `app/dashboard/products/page.tsx` | Master List CRUD (~347 lines) with inspection level, AQL level, supplier, company filter, permission-gated |
+| `app/dashboard/events/page.tsx` | Main events page (~1348 lines, most complex file), permission-gated actions, failed events workflow, pagination, sortable columns, Company column |
+| `app/dashboard/users/page.tsx` | Admin-only user/settings management page (~413 lines, add/delete users, suggested actions, suppliers) |
 
 ---
 
@@ -74,30 +88,73 @@ Login: username `user`, password `password`
 ### Auth
 | Method | Path | Body | Notes |
 |--------|------|------|-------|
-| POST | `/api/auth/login` | `{username, password}` | Returns `{token, username}`. Hardcoded to user/password |
+| POST | `/api/auth/login` | `{username, password}` | Returns `{token, username, is_admin, company_access, can_manage_products, can_edit_pending, can_delete_pending, can_edit_events, can_delete_events, can_set_suggested_action, can_mark_addressed, can_edit_addressed, can_delete_addressed}` |
+
+### Users (Admin only)
+| Method | Path | Body | Notes |
+|--------|------|------|-------|
+| GET | `/api/users` | -- | Returns all users (password excluded) |
+| POST | `/api/users` | `{username, password, company_access, can_manage_products, can_delete_pending, can_delete_events}` | Creates non-admin user |
+| DELETE | `/api/users/{username}` | -- | Deletes user (admin cannot be deleted) |
+
+### Reference Data
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/api/aql-levels` | Returns available AQL levels (0.065 through 6.5) |
+| GET | `/api/inspection-levels` | Returns inspection levels (I, II, III, S-1 through S-4) |
+| GET | `/api/companies` | Returns company list: `["VBC", "VBP"]` |
+| GET | `/api/aql/lookup` | Query params: `lot_size`, `inspection_level`, `aql_level`. Returns code letter, sample size, accept, reject |
 
 ### Products (Master List)
 | Method | Path | Body | Notes |
 |--------|------|------|-------|
-| GET | `/api/products` | -- | Returns array of all products |
-| POST | `/api/products` | `{name}` | Creates product, auto-increments ID |
+| GET | `/api/products` | `?company=All\|VBC\|VBP` | Returns products filtered by company |
+| POST | `/api/products` | `{name, inspection_level, aql_level, test_details, supplier, company}` | Creates product. `company="All"` assigns to both VBC and VBP |
+| PUT | `/api/products/{id}` | `{name, inspection_level, aql_level, test_details, supplier, company}` | Updates product |
 | DELETE | `/api/products/{id}` | -- | Removes product |
 
 ### Pending Inspections
 | Method | Path | Body | Notes |
 |--------|------|------|-------|
-| GET | `/api/pending` | -- | Returns array of all pending inspections |
-| POST | `/api/pending` | `{product_id, direction, lot_size, estimated_date}` | Creates pending inspection |
-| PUT | `/api/pending/{id}` | `{product_id, direction, lot_size, estimated_date}` | Updates pending inspection |
+| GET | `/api/pending` | `?company=All\|VBC\|VBP` | Returns pending inspections filtered by company |
+| POST | `/api/pending` | `{product_id, direction, lot_size, estimated_date, company}` | Creates pending inspection, auto-calculates suggested sample size |
+| PUT | `/api/pending/{id}` | `{product_id, direction, lot_size, estimated_date, company}` | Updates pending inspection |
 | DELETE | `/api/pending/{id}` | -- | Removes pending inspection |
 
 ### Events (Completed Inspections)
 | Method | Path | Body | Notes |
 |--------|------|------|-------|
-| GET | `/api/events` | -- | Returns array of all events |
-| POST | `/api/events` | `{product_id, direction, lot_size, quantity_inspected, quantity_non_conforming, date_inspected, pending_id?}` | Creates event. If `pending_id` provided, auto-removes that pending inspection |
-| PUT | `/api/events/{id}` | `{product_id, direction, lot_size, quantity_inspected, quantity_non_conforming, date_inspected}` | Updates event |
+| GET | `/api/events` | `?company=All\|VBC\|VBP` | Returns events filtered by company |
+| POST | `/api/events` | `{product_id, direction, lot_size, quantity_inspected, quantity_non_conforming, date_inspected, pending_id?, company}` | Creates event with auto-calculated pass/fail from AQL. Removes pending if `pending_id` provided |
+| PUT | `/api/events/{id}` | `{product_id, direction, lot_size, quantity_inspected, quantity_non_conforming, date_inspected}` | Updates event, recalculates pass/fail |
 | DELETE | `/api/events/{id}` | -- | Removes event |
+
+### Suggested Actions
+| Method | Path | Body | Notes |
+|--------|------|------|-------|
+| GET | `/api/suggested-actions` | -- | Returns list of configurable suggested actions |
+| POST | `/api/suggested-actions` | `{action}` | Adds a new suggested action |
+| DELETE | `/api/suggested-actions/{action}` | -- | Removes a suggested action |
+
+### Suppliers
+| Method | Path | Body | Notes |
+|--------|------|------|-------|
+| GET | `/api/suppliers` | -- | Returns list of supplier names |
+| POST | `/api/suppliers` | `{name}` | Adds a new supplier |
+| DELETE | `/api/suppliers/{index}` | -- | Removes supplier; cascades to products (sets their supplier to "pending") |
+
+### Event Actions (Suggested Action & Addressing)
+| Method | Path | Body | Notes |
+|--------|------|------|-------|
+| PUT | `/api/events/{id}/suggested-action` | `{suggested_action}` | Sets suggested action on a failed event |
+| PUT | `/api/events/{id}/address` | `{addressed_date}` | Marks a failed event as addressed |
+| PUT | `/api/events/{id}/unaddress` | -- | Unmarks an addressed event |
+
+### PDF Export
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/api/events/export/pdf` | `?lang=en\|es&company=All\|VBC\|VBP` Exports filtered events as a landscape table PDF |
+| GET | `/api/events/{id}/export/pdf` | `?lang=en\|es` Exports single event as a branded inspection report PDF |
 
 ---
 
@@ -106,9 +163,15 @@ Login: username `user`, password `password`
 ### Product
 ```python
 {
-    "id": int,           # auto-increment
+    "id": int,
     "name": str,
-    "created_at": str    # ISO datetime
+    "inspection_level": str,  # "I", "II", "III", "S-1", "S-2", "S-3", "S-4"
+    "aql_level": str,         # "0.065" through "6.5"
+    "test_details": str,
+    "supplier": str,          # from admin-configurable supplier list; "pending" if supplier was deleted
+    "companies": list[str],   # ["VBC"], ["VBP"], or ["VBC", "VBP"]
+    "created_by": str,
+    "created_at": str
 }
 ```
 
@@ -118,9 +181,12 @@ Login: username `user`, password `password`
     "id": int,
     "product_id": int,
     "product_name": str,
-    "direction": str,       # "incoming" or "outgoing"
+    "direction": str,              # "incoming" or "outgoing"
     "lot_size": int,
-    "estimated_date": str,  # ISO date "YYYY-MM-DD"
+    "suggested_sample_size": int,  # auto-calculated from AQL tables
+    "estimated_date": str,
+    "companies": list[str],        # ["VBC"], ["VBP"], or ["VBC", "VBP"]
+    "created_by": str,
     "created_at": str
 }
 ```
@@ -135,62 +201,119 @@ Login: username `user`, password `password`
     "lot_size": int,
     "quantity_inspected": int,
     "quantity_non_conforming": int,
-    "pass_fail": None,      # placeholder -- will be calculated by AQL in Step 4
+    "pass_fail": str,           # "pass" or "fail", auto-calculated from AQL
+    "sample_size": int,         # from AQL lookup
+    "accept_number": int,       # Ac from AQL table
+    "reject_number": int,       # Re from AQL table (always Ac+1)
+    "code_letter": str,         # AQL code letter (A-R)
     "date_inspected": str,
-    "created_at": str
+    "companies": list[str],     # ["VBC"], ["VBP"], or ["VBC", "VBP"]
+    "created_by": str,
+    "created_at": str,
+    "suggested_action": str|None,  # assigned from configurable suggested actions list
+    "addressed": bool,             # whether the failed event has been addressed
+    "addressed_date": str|None     # date the fail was addressed
 }
 ```
 
 ---
 
-## UI Features Implemented
+## AQL Integration (Steps 2-4)
+
+AQL values are sourced from ANSI/ASQ Z1.4-2003 (R2018), verified against user-provided spreadsheet.
+
+- **AQL range**: 0.065, 0.10, 0.15, 0.25, 0.40, 0.65, 1.0, 1.5, 2.5, 4.0, 6.5 (11 values)
+- **Inspection levels**: I, II, III, S-1, S-2, S-3, S-4
+- **Code letters**: A through R (16 letters, sample sizes 2 to 2000)
+- **Accept numbers**: 0, 1, 2, 3, 5, 7, 10, 14, 21 (reject = accept + 1)
+- **Arrow cells resolved**: every cell in the table has an Ac/Re pair
+
+### How it works
+1. Product has inspection_level and aql_level set in master list
+2. When scheduling an inspection, lot_size + product settings -> code letter -> suggested sample size
+3. When completing an inspection, lot_size + product settings -> code letter -> Ac/Re -> compare with non-conforming count -> pass/fail
+4. Live AQL preview shown in the Complete Inspection panel (updates as lot size changes)
+
+---
+
+## UI Features
 
 ### Login Page (`/`)
-- Username/password form, validates against backend, stores token in localStorage
+- Username/password form, validates against backend, stores token + permissions in localStorage
+- On login, company is set to user's `company_access` (restricts view for non-All users)
 
 ### Navigation (`/dashboard/*`)
-- Top nav bar: "QC Inspector" branding, "Master List" tab, "Events" tab, "Sign Out"
+- Top nav bar: Company logos (VBC/VBP, conditional on selection) + "QC Inspector" branding, "Master List" tab, "Events" tab, "Users" tab (admin only), Company dropdown (All/VBC/VBP) or static company label if user has restricted access, Language dropdown (English/Espanol), "Sign Out"
 - Active tab highlighted in blue
 - Auth check on load (redirects to login if no token)
+- Company selection filters all product/event/pending views and tags new records accordingly
+- Language selection translates all visible UI text and PDF exports
+
+### Users Page (`/dashboard/users`) -- Admin only
+- Add user form: username, password, company access dropdown, permission checkboxes (manage products, edit/delete pending, edit/delete events, set suggested action, mark/edit/delete addressed)
+- Suggested Actions management: add/delete configurable actions used in Failed Events workflow
+- Suppliers management: add/delete supplier names used in product creation (cascade on delete sets products to "pending")
+- Table: Username, Company Access, permissions columns, Delete button
+- Admin user has yellow "Admin" badge and cannot be deleted
+- Non-admin users see "Access denied" if they navigate to this page
 
 ### Master List (`/dashboard/products`)
-- Add product form (text input + button)
-- Table: ID, Name, Date Added, Remove button
+- Add product form and edit/delete buttons hidden if user lacks `can_manage_products` permission
+- Add product form: name, inspection level dropdown, AQL level dropdown, test details textarea, supplier dropdown
+- Table: ID, Name, Inspection Level, AQL Level, Test Details (truncated with hover tooltip), Supplier (orange italic if "pending"), Date Added, Added By, Edit/Delete actions
+- Inline edit mode with Save/Cancel
 
 ### Events Page (`/dashboard/events`)
 
 **Schedule Inspection** (top form):
 - Product dropdown (from Master List), Direction dropdown, Lot Size input, Estimated Date picker
-- "Schedule" button creates a pending inspection
 
 **Pending Inspections** (table, only shown when items exist):
-- Columns: Product, Direction, Lot Size, Suggested Qty (placeholder "--"), Est. Date
+- Columns: Product, Direction, Lot Size, Suggested Qty (auto-calculated), Est. Date, Company, User (all sortable)
 - Overdue detection: rows with past dates get red background + "OVERDUE" badge
 - Actions: Inspect, Edit, Delete
 - Edit mode: inline editing with yellow background, Save/Cancel buttons
+- Pagination: 10/20/50 per page with Previous/Next controls
 
 **Complete Inspection** (blue panel, appears when "Inspect" clicked):
 - Pre-fills from pending: product, direction, lot size
-- Fields: Lot Size, Suggested Inspection Qty (disabled placeholder "--"), Qty Inspected, Qty Non-Conforming, Date Inspected (defaults to today)
+- Fields: Lot Size, Suggested Inspection Qty (auto-calculated, read-only), Qty Inspected, Qty Non-Conforming, Date Inspected (defaults to today)
+- AQL info box: shows Code Letter, Accept/Reject numbers, live Pass/Fail preview
 - Complete/Cancel buttons
 - On complete: creates event + removes pending inspection
 
-**Completed Events** (table):
-- Columns: ID, Product, Direction, Lot Size, Inspected, Non-Conforming, Pass/Fail (placeholder "--"), Date Inspected
-- Actions: Edit, Delete
-- Edit mode: inline editing with yellow background, Save/Cancel buttons
+**Failed Events** (table, orange title, shown when failed events without suggested action exist):
+- Columns: ID, Product, Direction, Lot Size, Sample, Inspected, Non-Conf., Ac/Re, Suggested Action (dropdown), Date, Company, User (all sortable except Ac/Re)
+- Suggested Action dropdown allows assigning a configurable action to failed events
+- Actions: PDF, Edit, Delete
+- "Export PDF" button exports all events as a landscape table
+- Pagination: 10/20/50 per page with Previous/Next controls
 
----
+**Awaiting Fix** (table, red title, shown above Passed Events when failed events have suggested action but not yet addressed):
+- Columns: ID, Product, Direction, Lot Size, Non-Conf., Suggested Action, Date, Company, User, Addressed Date (date picker) (all sortable except Addressed Date)
+- "Mark Addressed" button moves event to Passed Events
+- Actions: Mark Addressed, PDF
+- Pagination: 10/20/50 per page with Previous/Next controls
 
-## Placeholder Fields (for Step 2-4: AQL Integration)
+**Passed Events** (table, merges first-pass passes + addressed fails):
+- Columns: Status icon, ID, Product, Direction, Lot Size, Sample, Inspected, Non-Conf., Ac/Re, Date, Company, User (all sortable except status icon and Ac/Re)
+- Status icon column: green checkmark for first-pass passes, orange wrench for fixed (addressed) fails
+- Addressed events show Unaddress, Edit, Delete actions; regular events show Edit, Delete
+- Actions: PDF, Edit, Delete (permission-gated)
+- All numbers formatted with commas (toLocaleString)
+- Pagination: 10/20/50 per page with Previous/Next controls
 
-These fields exist in the UI but show "--" and are marked with TODO comments:
+### PDF Export (Single Event Inspection Report)
 
-1. **Suggested Qty** column in Pending Inspections table -- will show recommended sample size based on lot size + AQL level
-2. **Suggested Inspection Qty** field in Complete Inspection panel -- same, shown during inspection
-3. **Pass/Fail** column in Completed Events table -- will be auto-calculated based on AQL accept/reject numbers vs non-conforming count
+The single-event PDF is generated server-side using `reportlab` and follows the layout defined in `Event Display Output Template.pdf` (root of project). **When the template PDF is updated, the code in `backend/main.py` (`export_single_event_pdf` function) must be updated to match.**
 
-All three have `TODO: populate from AQL table based on lot size + inspection level` comments in the source code.
+Layout:
+- **Header**: VB Packaging logo (`backend/data/logo.jpg`) top-left + company address top-right
+- **Title**: "Inspection Report"
+- **Data table** (2 columns: Display Label, Value):
+  - Product, Inspection Date, Lot Size, Sample Size, Units Inspected, Ac/Re, Non Conforming Units
+- **Pass/Fail result**: Centered bold text below the table -- green if PASS, red if FAIL
+- **Footer**: Contact info (Miguel Villarreal, email, phone) + decorative wave graphic
 
 ---
 
@@ -199,9 +322,9 @@ All three have `TODO: populate from AQL table based on lot size + inspection lev
 | Step | Description | Status |
 |------|-------------|--------|
 | 1 | Build initial testable instance | COMPLETE |
-| 2 | Research AQL levels (ANSI/ASQ Z1.4 / ISO 2859-1) | NOT STARTED |
-| 3 | Convert AQL table to JSON (`backend/data/aql_table.json`) | NOT STARTED |
-| 4 | Connect AQL to Events (dropdowns, auto-calculate pass/fail, populate Suggested Qty) | NOT STARTED |
+| 2 | Research AQL levels (ANSI/ASQ Z1.4 / ISO 2859-1) | COMPLETE |
+| 3 | Convert AQL table to JSON (`backend/data/aql_table.json`) | COMPLETE |
+| 4 | Connect AQL to Events (dropdowns, auto-calculate pass/fail, populate Suggested Qty) | COMPLETE |
 | 5 | Google Sheets integration for dynamic spreadsheet updates | NOT STARTED |
 | 6 | SQLite persistence, JWT auth, Docker container, start/stop scripts | NOT STARTED |
 
@@ -214,3 +337,13 @@ All three have `TODO: populate from AQL table based on lot size + inspection lev
 - Tailwind v4 uses the new `@tailwindcss/postcss` plugin pattern (not the v3 config approach)
 - All frontend pages are `"use client"` components
 - Container width on events page is `max-w-5xl`
+- AQL lookup is lot-size-based (lot size + inspection level -> code letter -> sample size + Ac/Re)
+- Multi-company: records store `companies` as a list (e.g. `["VBC"]` or `["VBC", "VBP"]`). "All" in the UI means both companies.
+- i18n: translations defined in `frontend/app/i18n.tsx`, ~140 keys. Language and company choice persisted in localStorage.
+- All displayed numbers on Events page use `.toLocaleString()` for comma formatting
+- Failed events lifecycle: Failed Events (no action) -> assign suggested action -> Awaiting Fix -> mark addressed -> Passed Events (with wrench icon)
+- Pagination: all event section tables paginated client-side (10/20/50 per page). Pagination controls hidden when <= 10 items. Page resets to 1 on data change or sort change.
+- Sortable columns: click column header to toggle asc/desc sort. Sort arrows indicate direction. Implemented via inline `sortItems` + `SortArrow` component in events page.
+- Supplier cascade: deleting a supplier sets all products with that supplier to "pending" (shown in orange italic in UI)
+- `suppressHydrationWarning` on `<html>` tag in layout.tsx to prevent browser extension hydration mismatches
+- GitHub repo: https://github.com/Miguel-Villarreal/QC-VBP

@@ -6,7 +6,7 @@
 - **Backend**: Python FastAPI
 - **Database**: SQLite (local persistence, simple, no extra services)
 - **Packaging**: Single Docker container using `uv` for Python dependencies
-- **Auth**: Hardcoded single user for MVP, schema supports multiple users
+- **Auth**: In-memory user store with admin user. Admin can add/delete users with granular permissions
 
 ## Step 1: Build Initial Testable Instance (No Persistence)
 
@@ -34,66 +34,56 @@
 
 ---
 
-## Step 2: Research and Build AQL Table
+## Step 2: Research and Build AQL Table -- COMPLETE
 
 **Goal**: Create an accurate AQL reference table based on ANSI/ASQ Z1.4 (ISO 2859-1) standard.
 
-### Tasks
-1. Research AQL sampling plans from the standard:
-   - Lot size ranges -> Sample size code letters
-   - Code letters -> Sample sizes for each inspection level (I, II, III, S-1 through S-4)
-   - Accept/Reject numbers for each AQL value (0.065% through 15%) at Normal inspection severity
-2. Compile into a structured format for review
-
-### Milestone
-- Complete AQL table presented for user approval
-- Covers all standard lot size ranges, inspection levels, and AQL percentages
-
-### Tests
-- Cross-reference values against published AQL charts
+### Completed
+- AQL table compiled from standard and verified against user-provided spreadsheet (`AQL Chart.xlsx`)
+- Arrow cells resolved (every cell has Ac/Re pair)
+- AQL range: 0.065 through 6.5 (11 values)
+- Accept number sequence: 0, 1, 2, 3, 5, 7, 10, 14, 21
+- Human-readable reference: `AQL_TABLES.md`
 
 ---
 
-## Step 3: Convert AQL Table to Machine-Readable Format
+## Step 3: Convert AQL Table to Machine-Readable Format -- COMPLETE
 
 **Goal**: Store the approved AQL table in a file the backend can consume.
 
-### Tasks
-1. Convert approved table to JSON (structured, easy for Python to parse)
-2. File: `backend/data/aql_table.json`
-3. Backend utility to load and query the table
-
-### Milestone
-- JSON file passes schema validation
-- Backend can answer: given lot size + AQL level + inspection level -> sample size, accept number, reject number
-
-### Tests
-- Unit tests: query known lot size / AQL combinations, verify correct sample size and accept/reject numbers
+### Completed
+- `backend/data/aql_table.json` with lot ranges, sample sizes, and accept/reject table
+- `backend/aql.py` utility: `get_code_letter()`, `get_sample_size()`, `get_accept_reject()`, `lookup()`
+- `backend/test_aql.py` with 5 unit tests (all passing)
 
 ---
 
-## Step 4: Connect AQL to Events
+## Step 4: Connect AQL to Events -- COMPLETE
 
 **Goal**: Events form uses AQL data for dropdowns and auto-calculates pass/fail.
 
-### Tasks
-1. Add API endpoint: `GET /api/aql/levels` -- returns available inspection levels and AQL values
-2. Update Events form:
-   - Add "Inspection Level" dropdown (General I, II, III)
-   - Add "AQL Level" dropdown (0.065% to 15%)
-   - Add "Lot Size" field
-   - Auto-calculate: given lot size + inspection level -> sample size code -> sample size
-   - Auto-calculate: given sample size + AQL -> accept/reject numbers
-   - Compare quantity of non-conforming units against accept number -> Pass or Fail
-3. Display calculated values (sample size, accept number, reject number) as read-only fields
-4. Pass/Fail shown automatically after form is filled
+### Completed
+- Products have inspection_level and aql_level fields (set in master list)
+- `GET /api/aql-levels` and `GET /api/inspection-levels` endpoints
+- `GET /api/aql/lookup` endpoint (lot_size + inspection_level + aql_level -> code letter, sample size, Ac/Re)
+- Pending inspections show auto-calculated suggested sample size
+- Complete Inspection panel shows live AQL preview (code letter, Ac/Re, pass/fail) based on lot size
+- Events auto-calculate pass/fail on creation and update
+- Completed events table shows Sample, Ac/Re, and Pass/Fail columns
 
-### Milestone
-- Creating an event with AQL parameters auto-determines pass/fail
-- All AQL-driven fields populate correctly
-
-### Tests
-- Create events with known lot sizes and defect counts, verify pass/fail matches manual AQL lookup
+### Additional Features (added post Step 4)
+- **PDF Export**: Single-event branded PDF + all-events table PDF via reportlab. Layout follows `Event Display Output Template.pdf`.
+- **i18n**: English/Spanish toggle (React Context + localStorage). PDFs also generated in selected language.
+- **Multi-company**: VBC / VBP / All company selector. Products, events, and pending inspections are tagged with companies and filtered accordingly.
+- **User tracking**: `created_by` field on events and pending inspections, shown in tables.
+- **User management**: Admin-only Users tab. Super admin can add/delete users with per-user permissions (company access, manage products, delete pending, delete events). Permissions enforced on frontend by hiding/showing UI elements.
+- **Failed Events workflow**: Failed inspections go through a lifecycle: Failed Events (assign suggested action) -> Awaiting Fix (mark as addressed with date) -> released into Passed Events (with wrench icon indicator). Suggested actions are configurable in Settings.
+- **Event sections**: Events page is split into: Failed Events (needs suggested action, orange title), Awaiting Fix (has action, needs addressing, red title, shown above Passed Events), and Passed Events (passed + addressed fails merged, with status icons: green checkmark for first-pass, orange wrench for fixed).
+- **Number formatting**: All displayed numbers use comma formatting (toLocaleString).
+- **Company logos**: VBC and VBP logos shown in nav bar, conditional on selected company.
+- **Supplier field**: Products have a supplier field selected from an admin-configurable supplier list. Suppliers managed in Settings. Cascade on delete sets supplier to "pending". Marked as REPORT VARIABLE for future reporting dashboard.
+- **Pagination**: All event sections (Pending, Failed Events, Awaiting Fix, Passed Events) paginated with 10/20/50 per-page selector and Previous/Next navigation. Pagination controls hidden when 10 or fewer items.
+- **Sortable columns**: All event section tables have clickable column headers that toggle ascending/descending sort. Sort indicator arrows shown on active column.
 
 ---
 

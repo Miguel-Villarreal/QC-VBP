@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useI18n, useCompany, useAuth } from "../../i18n";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 
@@ -9,38 +10,51 @@ interface Product {
   name: string;
   inspection_level: string;
   aql_level: string;
+  test_details: string;
+  supplier: string;
+  created_by: string;
   created_at: string;
 }
 
 export default function ProductsPage() {
+  const { t } = useI18n();
+  const { company } = useCompany();
+  const { perms } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [aqlLevels, setAqlLevels] = useState<string[]>([]);
   const [inspectionLevels, setInspectionLevels] = useState<string[]>([]);
+  const [suppliers, setSuppliers] = useState<string[]>([]);
   const [newName, setNewName] = useState("");
   const [newInspLevel, setNewInspLevel] = useState("");
   const [newAql, setNewAql] = useState("");
+  const [newTestDetails, setNewTestDetails] = useState("");
+  const [newSupplier, setNewSupplier] = useState("");
 
   // Editing state
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editInspLevel, setEditInspLevel] = useState("");
   const [editAql, setEditAql] = useState("");
+  const [editTestDetails, setEditTestDetails] = useState("");
+  const [editSupplier, setEditSupplier] = useState("");
 
   const loadProducts = useCallback(async () => {
-    const res = await fetch(`${API}/api/products`);
+    const res = await fetch(`${API}/api/products?company=${company}`);
     setProducts(await res.json());
-  }, []);
+  }, [company]);
 
   useEffect(() => {
     loadProducts();
     Promise.all([
       fetch(`${API}/api/aql-levels`).then((r) => r.json()),
       fetch(`${API}/api/inspection-levels`).then((r) => r.json()),
-    ]).then(([aqls, insps]) => {
+      fetch(`${API}/api/suppliers`).then((r) => r.json()).catch(() => []),
+    ]).then(([aqls, insps, supps]) => {
       setAqlLevels(aqls);
       setNewAql(aqls[0] || "");
       setInspectionLevels(insps);
       setNewInspLevel(insps[1] || insps[0] || ""); // default to "II"
+      setSuppliers(Array.isArray(supps) ? supps : []);
     });
   }, [loadProducts]);
 
@@ -54,9 +68,15 @@ export default function ProductsPage() {
         name: newName.trim(),
         inspection_level: newInspLevel,
         aql_level: newAql,
+        test_details: newTestDetails,
+        supplier: newSupplier,
+        company,
+        created_by: perms.username,
       }),
     });
     setNewName("");
+    setNewTestDetails("");
+    setNewSupplier("");
     loadProducts();
   }
 
@@ -70,6 +90,8 @@ export default function ProductsPage() {
     setEditName(p.name);
     setEditInspLevel(p.inspection_level);
     setEditAql(p.aql_level);
+    setEditTestDetails(p.test_details || "");
+    setEditSupplier(p.supplier || "");
   }
 
   async function saveEdit(id: number) {
@@ -80,6 +102,9 @@ export default function ProductsPage() {
         name: editName.trim(),
         inspection_level: editInspLevel,
         aql_level: editAql,
+        test_details: editTestDetails,
+        supplier: editSupplier,
+        company,
       }),
     });
     setEditingId(null);
@@ -87,61 +112,99 @@ export default function ProductsPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <h2 className="text-xl font-bold mb-4">Master List</h2>
+    <div className="max-w-5xl mx-auto">
+      <h2 className="text-xl font-bold mb-4">{t("masterList")}</h2>
 
-      <form onSubmit={handleAdd} className="flex gap-2 mb-6 items-end">
-        <input
-          type="text"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          placeholder="Product name"
-          className="flex-1 border rounded px-3 py-2"
-          required
-        />
-        <select
-          value={newInspLevel}
-          onChange={(e) => setNewInspLevel(e.target.value)}
-          className="border rounded px-3 py-2"
-          required
-        >
-          {inspectionLevels.map((level) => (
-            <option key={level} value={level}>
-              Level {level}
-            </option>
-          ))}
-        </select>
-        <select
-          value={newAql}
-          onChange={(e) => setNewAql(e.target.value)}
-          className="border rounded px-3 py-2"
-          required
-        >
-          {aqlLevels.map((level) => (
-            <option key={level} value={level}>
-              AQL {level}
-            </option>
-          ))}
-        </select>
-        <button
-          type="submit"
-          className="bg-blue-600 text-white px-4 py-2 rounded font-medium hover:bg-blue-700"
-        >
-          Add Product
-        </button>
-      </form>
+      {perms.can_manage_products && <form onSubmit={handleAdd} className="bg-white shadow rounded-lg p-6 mb-6 grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">{t("productName")}</label>
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder={t("productNamePlaceholder")}
+            className="w-full border rounded px-3 py-2"
+            required
+          />
+        </div>
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <label className="block text-sm font-medium mb-1">{t("inspectionLevel")}</label>
+            <select
+              value={newInspLevel}
+              onChange={(e) => setNewInspLevel(e.target.value)}
+              className="w-full border rounded px-3 py-2"
+              required
+            >
+              {inspectionLevels.map((level) => (
+                <option key={level} value={level}>
+                  Level {level}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="block text-sm font-medium mb-1">{t("aqlLevel")}</label>
+            <select
+              value={newAql}
+              onChange={(e) => setNewAql(e.target.value)}
+              className="w-full border rounded px-3 py-2"
+              required
+            >
+              {aqlLevels.map((level) => (
+                <option key={level} value={level}>
+                  AQL {level}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">{t("testDetails")}</label>
+          <textarea
+            value={newTestDetails}
+            onChange={(e) => setNewTestDetails(e.target.value)}
+            placeholder={t("testDetailsPlaceholder")}
+            className="w-full border rounded px-3 py-2 h-20 resize-y"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">{t("supplier")}</label>
+          <select
+            value={newSupplier}
+            onChange={(e) => setNewSupplier(e.target.value)}
+            className="w-full border rounded px-3 py-2"
+          >
+            <option value="">{t("supplierPlaceholder")}</option>
+            {suppliers.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+        <div className="col-span-2">
+          <button
+            type="submit"
+            className="bg-blue-600 text-white px-4 py-2 rounded font-medium hover:bg-blue-700"
+          >
+            {t("addProduct")}
+          </button>
+        </div>
+      </form>}
 
       {products.length === 0 ? (
-        <p className="text-gray-500">No products yet. Add one above.</p>
+        <p className="text-gray-500">{t("noProducts")}</p>
       ) : (
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b bg-gray-100">
-              <th className="text-left px-3 py-2">ID</th>
-              <th className="text-left px-3 py-2">Name</th>
-              <th className="text-left px-3 py-2">Inspection Level</th>
-              <th className="text-left px-3 py-2">AQL Level</th>
-              <th className="text-left px-3 py-2">Date Added</th>
+              <th className="text-left px-3 py-2">{t("id")}</th>
+              <th className="text-left px-3 py-2">{t("name")}</th>
+              <th className="text-left px-3 py-2">{t("inspectionLevel")}</th>
+              <th className="text-left px-3 py-2">{t("aqlLevel")}</th>
+              <th className="text-left px-3 py-2">{t("testDetails")}</th>
+              <th className="text-left px-3 py-2">{t("supplier")}</th>
+              <th className="text-left px-3 py-2">{t("dateAdded")}</th>
+              <th className="text-left px-3 py-2">{t("addedBy")}</th>
               <th className="px-3 py-2"></th>
             </tr>
           </thead>
@@ -185,20 +248,40 @@ export default function ProductsPage() {
                     </select>
                   </td>
                   <td className="px-3 py-2">
+                    <textarea
+                      value={editTestDetails}
+                      onChange={(e) => setEditTestDetails(e.target.value)}
+                      className="border rounded px-2 py-1 w-full h-16 resize-y text-sm"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <select
+                      value={editSupplier}
+                      onChange={(e) => setEditSupplier(e.target.value)}
+                      className="border rounded px-2 py-1 w-full"
+                    >
+                      <option value="">{t("supplierPlaceholder")}</option>
+                      {suppliers.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
                     {new Date(p.created_at).toLocaleDateString()}
                   </td>
+                  <td className="px-3 py-2">{p.created_by}</td>
                   <td className="px-3 py-2 text-right space-x-2">
                     <button
                       onClick={() => saveEdit(p.id)}
                       className="text-green-600 hover:text-green-800 text-sm font-medium"
                     >
-                      Save
+                      {t("save")}
                     </button>
                     <button
                       onClick={() => setEditingId(null)}
                       className="text-gray-500 hover:text-gray-700 text-sm"
                     >
-                      Cancel
+                      {t("cancel")}
                     </button>
                   </td>
                 </tr>
@@ -208,22 +291,50 @@ export default function ProductsPage() {
                   <td className="px-3 py-2">{p.name}</td>
                   <td className="px-3 py-2">{p.inspection_level}</td>
                   <td className="px-3 py-2">{p.aql_level}</td>
+                  <td className="px-3 py-2 max-w-48 relative group">
+                    {p.test_details ? (
+                      <>
+                        <span className="block truncate text-sm text-gray-600 cursor-default">
+                          {p.test_details}
+                        </span>
+                        <div className="hidden group-hover:block absolute z-10 left-0 top-full mt-1 bg-gray-800 text-white text-sm rounded p-3 max-w-sm whitespace-pre-wrap shadow-lg">
+                          {p.test_details}
+                        </div>
+                      </>
+                    ) : (
+                      <span className="text-gray-400">--</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
+                    {p.supplier === "pending" ? (
+                      <span className="text-orange-500 italic text-sm">{t("pendingSupplier")}</span>
+                    ) : p.supplier ? (
+                      <span className="text-sm">{p.supplier}</span>
+                    ) : (
+                      <span className="text-gray-400">--</span>
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                     {new Date(p.created_at).toLocaleDateString()}
                   </td>
+                  <td className="px-3 py-2">{p.created_by}</td>
                   <td className="px-3 py-2 text-right space-x-2">
-                    <button
-                      onClick={() => startEdit(p)}
-                      className="text-blue-600 hover:text-blue-800 text-sm"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(p.id)}
-                      className="text-red-600 hover:text-red-800 text-sm"
-                    >
-                      Remove
-                    </button>
+                    {perms.can_manage_products && (
+                      <>
+                        <button
+                          onClick={() => startEdit(p)}
+                          className="text-blue-600 hover:text-blue-800 text-sm"
+                        >
+                          {t("edit")}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(p.id)}
+                          className="text-red-600 hover:text-red-800 text-sm"
+                        >
+                          {t("remove")}
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               )

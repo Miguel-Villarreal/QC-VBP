@@ -32,43 +32,45 @@ def test_sample_sizes():
 
 
 def test_accept_reject():
-    # Worked example from AQL_TABLES.md: code L at AQL 2.5 = Ac 21, Re 22
-    assert get_accept_reject("L", "2.5") == (21, 22)
-    # Code H at AQL 0.65 = 2/3
-    assert get_accept_reject("H", "0.65") == (2, 3)
+    # Code K at AQL 2.5 = 7/8 (confirmed from standard)
+    assert get_accept_reject("K", "2.5") == (7, 8)
+    # Code K at AQL 1.0 = 3/4
+    assert get_accept_reject("K", "1.0") == (3, 4)
+    # Code L at AQL 2.5 = 10/11
+    assert get_accept_reject("L", "2.5") == (10, 11)
+    # Code H at AQL 0.65 = 1/2
+    assert get_accept_reject("H", "0.65") == (1, 2)
     # Code A at AQL 2.5 = 0/1
     assert get_accept_reject("A", "2.5") == (0, 1)
-    # Code J at AQL 1.0 = 5/6
-    assert get_accept_reject("J", "1.0") == (5, 6)
-    # No plan available: code A at AQL 0.065
-    assert get_accept_reject("A", "0.065") is None
-    # Low AQL: code N at AQL 0.010 = 0/1
-    assert get_accept_reject("N", "0.010") == (0, 1)
-    # High AQL: code A at AQL 10 = 1/2
-    assert get_accept_reject("A", "10") == (1, 2)
+    # Code J at AQL 1.0 = 2/3
+    assert get_accept_reject("J", "1.0") == (2, 3)
+    # Code L at AQL 6.5 = 21/22
+    assert get_accept_reject("L", "6.5") == (21, 22)
+    # Code R at AQL 0.065 = 3/4
+    assert get_accept_reject("R", "0.065") == (3, 4)
 
 
 def test_full_lookup():
-    # The worked example: lot 4000, Level II, AQL 2.5
+    # Lot 3000, Level II, AQL 2.5 -> K, 125, 7/8
+    result = lookup(3000, "II", "2.5")
+    assert result["code_letter"] == "K"
+    assert result["sample_size"] == 125
+    assert result["accept"] == 7
+    assert result["reject"] == 8
+
+    # Lot 4000, Level II, AQL 2.5 -> L, 200, 10/11
     result = lookup(4000, "II", "2.5")
     assert result["code_letter"] == "L"
     assert result["sample_size"] == 200
-    assert result["accept"] == 21
-    assert result["reject"] == 22
+    assert result["accept"] == 10
+    assert result["reject"] == 11
 
-    # Lot 500, Level II, AQL 1.0
+    # Lot 500, Level II, AQL 1.0 -> H, 50, 1/2
     result = lookup(500, "II", "1.0")
     assert result["code_letter"] == "H"
     assert result["sample_size"] == 50
-    assert result["accept"] == 3
-    assert result["reject"] == 4
-
-    # No plan for small lot at tight AQL
-    result = lookup(10, "II", "0.010")
-    assert result["code_letter"] == "B"  # lot 10 -> code B at level II
-    assert result["sample_size"] == 3
-    assert result["accept"] is None  # but no Ac/Re plan
-    assert result["reject"] is None
+    assert result["accept"] == 1
+    assert result["reject"] == 2
 
 
 def test_lot_size_boundaries():

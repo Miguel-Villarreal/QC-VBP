@@ -3,11 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
-
-const navItems = [
-  { href: "/dashboard/products", label: "Master List" },
-  { href: "/dashboard/events", label: "Events" },
-];
+import { useI18n, Lang, useCompany, Company, useAuth } from "../i18n";
 
 export default function DashboardLayout({
   children,
@@ -16,6 +12,15 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { lang, setLang, t } = useI18n();
+  const { company, setCompany } = useCompany();
+  const { perms } = useAuth();
+
+  const navItems = [
+    { href: "/dashboard/products", label: t("masterList") },
+    { href: "/dashboard/events", label: t("events") },
+    ...(perms.is_admin ? [{ href: "/dashboard/users", label: t("settings") }] : []),
+  ];
 
   useEffect(() => {
     if (!localStorage.getItem("token")) {
@@ -25,6 +30,7 @@ export default function DashboardLayout({
 
   function handleLogout() {
     localStorage.removeItem("token");
+    localStorage.removeItem("userPerms");
     router.push("/");
   }
 
@@ -32,6 +38,14 @@ export default function DashboardLayout({
     <div className="min-h-screen flex flex-col">
       <nav className="bg-white shadow px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3">
+            {(company === "All" || company === "VBC") && (
+              <img src="/logo_VBC.png" alt="VBC" className="h-9 object-contain" />
+            )}
+            {(company === "All" || company === "VBP") && (
+              <img src="/logo_VBP.jpg" alt="VBP" className="h-9 object-contain" />
+            )}
+          </div>
           <span className="font-bold text-lg">QC Inspector</span>
           {navItems.map((item) => (
             <Link
@@ -47,12 +61,35 @@ export default function DashboardLayout({
             </Link>
           ))}
         </div>
-        <button
-          onClick={handleLogout}
-          className="text-sm text-gray-500 hover:text-gray-700"
-        >
-          Sign Out
-        </button>
+        <div className="flex items-center gap-4">
+          {perms.company_access === "All" ? (
+            <select
+              value={company}
+              onChange={(e) => setCompany(e.target.value as Company)}
+              className="text-sm border rounded px-2 py-1 bg-white text-gray-600 font-medium"
+            >
+              <option value="All">{t("all")}</option>
+              <option value="VBC">VBC</option>
+              <option value="VBP">VBP</option>
+            </select>
+          ) : (
+            <span className="text-sm font-medium text-gray-600">{perms.company_access}</span>
+          )}
+          <select
+            value={lang}
+            onChange={(e) => setLang(e.target.value as Lang)}
+            className="text-sm border rounded px-2 py-1 bg-white text-gray-600"
+          >
+            <option value="en">English</option>
+            <option value="es">Espanol</option>
+          </select>
+          <button
+            onClick={handleLogout}
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            {t("signOut")}
+          </button>
+        </div>
       </nav>
       <main className="flex-1 p-6">{children}</main>
     </div>
