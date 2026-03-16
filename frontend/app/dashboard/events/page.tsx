@@ -21,6 +21,7 @@ interface PendingInspection {
   suggested_sample_size: number | null;
   estimated_date: string;
   created_by: string;
+  assigned_to: string;
   companies: string[];
 }
 
@@ -44,6 +45,11 @@ interface QCEvent {
   suggested_action: string;
   addressed: boolean;
   addressed_date: string;
+  addressed_by: string;
+  assigned_to: string;
+  released: boolean;
+  released_date: string;
+  released_by: string;
 }
 
 interface AqlResult {
@@ -68,6 +74,7 @@ export default function EventsPage() {
   const [events, setEvents] = useState<QCEvent[]>([]);
   const [pending, setPending] = useState<PendingInspection[]>([]);
   const [suggestedActions, setSuggestedActions] = useState<string[]>([]);
+  const [usernames, setUsernames] = useState<string[]>([]);
   const [productId, setProductId] = useState("");
   const [direction, setDirection] = useState("incoming");
 
@@ -103,17 +110,20 @@ export default function EventsPage() {
   const [editEventDateInspected, setEditEventDateInspected] = useState("");
 
   const loadData = useCallback(async () => {
-    const [prodRes, evtRes, pendRes, actRes] = await Promise.all([
+    const [prodRes, evtRes, pendRes, actRes, usersRes] = await Promise.all([
       fetch(`${API}/api/products?company=${company}`),
       fetch(`${API}/api/events?company=${company}`),
       fetch(`${API}/api/pending?company=${company}`),
       fetch(`${API}/api/suggested-actions`),
+      fetch(`${API}/api/users`),
     ]);
     const prods = await prodRes.json();
     setProducts(prods);
     setEvents(await evtRes.json());
     setPending(await pendRes.json());
     setSuggestedActions(await actRes.json());
+    const usersData = await usersRes.json();
+    setUsernames(usersData.map((u: { username: string }) => u.username));
     if (prods.length > 0 && !productId) {
       setProductId(String(prods[0].id));
     }
@@ -285,7 +295,43 @@ export default function EventsPage() {
     await fetch(`${API}/api/events/${eventId}/address`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ addressed: true, addressed_date: addressedDate }),
+      body: JSON.stringify({ addressed: true, addressed_date: addressedDate, addressed_by: perms.username }),
+    });
+    loadData();
+  }
+
+  async function assignPending(pendingId: number, assignedTo: string) {
+    await fetch(`${API}/api/pending/${pendingId}/assign`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assigned_to: assignedTo }),
+    });
+    loadData();
+  }
+
+  async function assignEvent(eventId: number, assignedTo: string) {
+    await fetch(`${API}/api/events/${eventId}/assign`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assigned_to: assignedTo }),
+    });
+    loadData();
+  }
+
+  async function handleRelease(eventId: number, releaseDate: string) {
+    await fetch(`${API}/api/events/${eventId}/release`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ released: true, released_date: releaseDate, released_by: perms.username }),
+    });
+    loadData();
+  }
+
+  async function handleUnrelease(eventId: number) {
+    await fetch(`${API}/api/events/${eventId}/release`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ released: false }),
     });
     loadData();
   }
@@ -327,7 +373,7 @@ export default function EventsPage() {
 
   // Split events into categories
   const passedEvents = events.filter(
-    (ev) => ev.pass_fail !== "fail"
+    (ev) => ev.pass_fail !== "fail" && !ev.released
   );
   const completedFailedEvents = events.filter(
     (ev) => ev.pass_fail === "fail" && !ev.suggested_action
@@ -336,12 +382,14 @@ export default function EventsPage() {
     (ev) => ev.pass_fail === "fail" && ev.suggested_action && !ev.addressed
   );
   const addressedEvents = events.filter(
-    (ev) => ev.pass_fail === "fail" && ev.suggested_action && ev.addressed
+    (ev) => ev.pass_fail === "fail" && ev.suggested_action && ev.addressed && !ev.released
   );
   const releasedEvents = [...passedEvents, ...addressedEvents];
+  const releasedProducts = events.filter((ev) => ev.released);
 
   // Address date state for inline mark-addressed form
   const [addressDates, setAddressDates] = useState<Record<number, string>>({});
+  const [releaseDates, setReleaseDates] = useState<Record<number, string>>({});
 
   // Pagination state per section
   const [pendingPage, setPendingPage] = useState(1);
@@ -352,18 +400,22 @@ export default function EventsPage() {
   const [awaitingPerPage, setAwaitingPerPage] = useState(10);
   const [releasedPage, setReleasedPage] = useState(1);
   const [releasedPerPage, setReleasedPerPage] = useState(10);
+  const [releasedProdsPage, setReleasedProdsPage] = useState(1);
+  const [releasedProdsPerPage, setReleasedProdsPerPage] = useState(10);
 
   // Sort state per section
   const [pendingSort, setPendingSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "estimated_date", dir: "asc" });
   const [failedNewSort, setFailedNewSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "id", dir: "desc" });
   const [awaitingSort, setAwaitingSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "id", dir: "desc" });
   const [releasedSort, setReleasedSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "id", dir: "desc" });
+  const [releasedProdsSort, setReleasedProdsSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "released_date", dir: "desc" });
 
   // Reset pages when data changes
   useEffect(() => { setPendingPage(1); }, [pending.length]);
   useEffect(() => { setFailedNewPage(1); }, [completedFailedEvents.length]);
   useEffect(() => { setAwaitingPage(1); }, [failedEvents.length]);
   useEffect(() => { setReleasedPage(1); }, [releasedEvents.length]);
+  useEffect(() => { setReleasedProdsPage(1); }, [releasedProducts.length]);
 
   function toggleSort(
     current: { key: string; dir: "asc" | "desc" },
@@ -553,6 +605,7 @@ export default function EventsPage() {
                 <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(pendingSort, setPendingSort, setPendingPage, "estimated_date")}>{t("estDate")}<SortArrow sortState={pendingSort} column="estimated_date" /></th>
                 <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(pendingSort, setPendingSort, setPendingPage, "companies")}>{t("company")}<SortArrow sortState={pendingSort} column="companies" /></th>
                 <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(pendingSort, setPendingSort, setPendingPage, "created_by")}>{t("user")}<SortArrow sortState={pendingSort} column="created_by" /></th>
+                <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(pendingSort, setPendingSort, setPendingPage, "assigned_to")}>{t("assignedTo")}<SortArrow sortState={pendingSort} column="assigned_to" /></th>
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
@@ -607,6 +660,7 @@ export default function EventsPage() {
                     </td>
                     <td className="px-3 py-2">{p.companies.join(", ")}</td>
                     <td className="px-3 py-2">{p.created_by}</td>
+                    <td className="px-3 py-2">{p.assigned_to || ""}</td>
                     <td className="px-3 py-2 text-right space-x-2">
                       <button
                         onClick={() => saveEditPending(p.id)}
@@ -647,6 +701,22 @@ export default function EventsPage() {
                     </td>
                     <td className="px-3 py-2">{p.companies.join(", ")}</td>
                     <td className="px-3 py-2">{p.created_by}</td>
+                    <td className="px-3 py-2">
+                      {perms.can_assign ? (
+                        <select
+                          value={p.assigned_to || ""}
+                          onChange={(e) => assignPending(p.id, e.target.value)}
+                          className="border rounded px-2 py-1 text-sm w-full"
+                        >
+                          <option value="">{t("unassigned")}</option>
+                          {usernames.map((u) => (
+                            <option key={u} value={u}>{u}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-sm">{p.assigned_to || ""}</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-right space-x-2">
                       <button
                         onClick={() => handleStartInspection(p)}
@@ -1031,6 +1101,7 @@ export default function EventsPage() {
                   <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(awaitingSort, setAwaitingSort, setAwaitingPage, "date_inspected")}>{t("date")}<SortArrow sortState={awaitingSort} column="date_inspected" /></th>
                   <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(awaitingSort, setAwaitingSort, setAwaitingPage, "companies")}>{t("company")}<SortArrow sortState={awaitingSort} column="companies" /></th>
                   <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(awaitingSort, setAwaitingSort, setAwaitingPage, "created_by")}>{t("user")}<SortArrow sortState={awaitingSort} column="created_by" /></th>
+                  <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(awaitingSort, setAwaitingSort, setAwaitingPage, "assigned_to")}>{t("assignedTo")}<SortArrow sortState={awaitingSort} column="assigned_to" /></th>
                   <th className="text-left px-3 py-2">{t("addressedDate")}</th>
                   <th className="px-3 py-2"></th>
                 </tr>
@@ -1062,6 +1133,22 @@ export default function EventsPage() {
                     <td className="px-3 py-2">{ev.date_inspected}</td>
                     <td className="px-3 py-2">{ev.companies.join(", ")}</td>
                     <td className="px-3 py-2">{ev.created_by}</td>
+                    <td className="px-3 py-2">
+                      {perms.can_assign ? (
+                        <select
+                          value={ev.assigned_to || ""}
+                          onChange={(e) => assignEvent(ev.id, e.target.value)}
+                          className="border rounded px-2 py-1 text-sm w-full"
+                        >
+                          <option value="">{t("unassigned")}</option>
+                          {usernames.map((u) => (
+                            <option key={u} value={u}>{u}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-sm">{ev.assigned_to || ""}</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2">
                       <input
                         type="date"
@@ -1116,7 +1203,8 @@ export default function EventsPage() {
                   <th className="text-left px-3 py-2">Ac/Re</th>
                   <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(releasedSort, setReleasedSort, setReleasedPage, "date_inspected")}>{t("date")}<SortArrow sortState={releasedSort} column="date_inspected" /></th>
                   <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(releasedSort, setReleasedSort, setReleasedPage, "companies")}>{t("company")}<SortArrow sortState={releasedSort} column="companies" /></th>
-                  <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(releasedSort, setReleasedSort, setReleasedPage, "created_by")}>{t("user")}<SortArrow sortState={releasedSort} column="created_by" /></th>
+                  <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(releasedSort, setReleasedSort, setReleasedPage, "created_by")}>{t("resolvedBy")}<SortArrow sortState={releasedSort} column="created_by" /></th>
+                  <th className="text-left px-3 py-2">{t("releasedDate")}</th>
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
@@ -1137,7 +1225,8 @@ export default function EventsPage() {
                       <td className="px-3 py-2 text-gray-400">--</td>
                       <td className="px-3 py-2">{ev.date_inspected}</td>
                       <td className="px-3 py-2">{ev.companies.join(", ")}</td>
-                      <td className="px-3 py-2">{ev.created_by}</td>
+                      <td className="px-3 py-2">{ev.addressed ? ev.addressed_by : ev.created_by}</td>
+                      <td className="px-3 py-2"></td>
                       <td className="px-3 py-2 text-right space-x-2">
                         <button
                           onClick={() => saveEditAddressed(ev.id)}
@@ -1232,7 +1321,8 @@ export default function EventsPage() {
                         />
                       </td>
                       <td className="px-3 py-2">{ev.companies.join(", ")}</td>
-                      <td className="px-3 py-2">{ev.created_by}</td>
+                      <td className="px-3 py-2">{ev.addressed ? ev.addressed_by : ev.created_by}</td>
+                      <td className="px-3 py-2"></td>
                       <td className="px-3 py-2 text-right space-x-2">
                         <button
                           onClick={() => saveEditEvent(ev.id)}
@@ -1277,8 +1367,22 @@ export default function EventsPage() {
                         {ev.date_inspected}
                       </td>
                       <td className="px-3 py-2">{ev.companies.join(", ")}</td>
-                      <td className="px-3 py-2">{ev.created_by}</td>
+                      <td className="px-3 py-2">{ev.addressed ? ev.addressed_by : ev.created_by}</td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="date"
+                          value={releaseDates[ev.id] || new Date().toISOString().slice(0, 10)}
+                          onChange={(e) => setReleaseDates((prev) => ({ ...prev, [ev.id]: e.target.value }))}
+                          className="border rounded px-2 py-1 text-sm"
+                        />
+                      </td>
                       <td className="px-3 py-2 text-right space-x-2">
+                        <button
+                          onClick={() => handleRelease(ev.id, releaseDates[ev.id] || new Date().toISOString().slice(0, 10))}
+                          className="bg-purple-600 text-white px-3 py-1 rounded text-sm hover:bg-purple-700"
+                        >
+                          {t("release")}
+                        </button>
                         <a
                           href={`${API}/api/events/${ev.id}/export/pdf?lang=${lang}`}
                           className="text-gray-600 hover:text-gray-800 text-sm"
@@ -1339,6 +1443,77 @@ export default function EventsPage() {
               </tbody>
             </table>
             <PaginationControls total={releasedEvents.length} page={releasedPage} perPage={releasedPerPage} setPage={setReleasedPage} setPerPage={setReleasedPerPage} />
+          </div>
+        )}
+      </section>
+
+      {/* --- Released Products --- */}
+      <section>
+        <h2 className="text-xl font-bold mb-4 text-purple-700">{t("releasedProducts")}</h2>
+        {releasedProducts.length === 0 ? (
+          <p className="text-gray-500">{t("noReleasedProducts")}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b bg-purple-50">
+                  <th className="w-8 px-2 py-2"></th>
+                  <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(releasedProdsSort, setReleasedProdsSort, setReleasedProdsPage, "id")}>{t("id")}<SortArrow sortState={releasedProdsSort} column="id" /></th>
+                  <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(releasedProdsSort, setReleasedProdsSort, setReleasedProdsPage, "product_name")}>{t("product")}<SortArrow sortState={releasedProdsSort} column="product_name" /></th>
+                  <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(releasedProdsSort, setReleasedProdsSort, setReleasedProdsPage, "direction")}>{t("direction")}<SortArrow sortState={releasedProdsSort} column="direction" /></th>
+                  <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(releasedProdsSort, setReleasedProdsSort, setReleasedProdsPage, "lot_size")}>{t("lotSize")}<SortArrow sortState={releasedProdsSort} column="lot_size" /></th>
+                  <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(releasedProdsSort, setReleasedProdsSort, setReleasedProdsPage, "date_inspected")}>{t("date")}<SortArrow sortState={releasedProdsSort} column="date_inspected" /></th>
+                  <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(releasedProdsSort, setReleasedProdsSort, setReleasedProdsPage, "companies")}>{t("company")}<SortArrow sortState={releasedProdsSort} column="companies" /></th>
+                  <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(releasedProdsSort, setReleasedProdsSort, setReleasedProdsPage, "released_date")}>{t("releasedDate")}<SortArrow sortState={releasedProdsSort} column="released_date" /></th>
+                  <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(releasedProdsSort, setReleasedProdsSort, setReleasedProdsPage, "released_by")}>{t("releasedBy")}<SortArrow sortState={releasedProdsSort} column="released_by" /></th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginate(sortItems(releasedProducts, releasedProdsSort.key, releasedProdsSort.dir), releasedProdsPage, releasedProdsPerPage).map((ev) => (
+                  <tr key={ev.id} className="border-b">
+                    <td className="px-2 py-2 text-center">
+                      {ev.addressed ? (
+                        <svg className="w-4 h-4 text-orange-500 inline-block" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></svg>
+                      ) : (
+                        <svg className="w-4 h-4 text-green-500 inline-block" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">{ev.id}</td>
+                    <td className="px-3 py-2">{ev.product_name}</td>
+                    <td className="px-3 py-2 capitalize">{ev.direction}</td>
+                    <td className="px-3 py-2">{ev.lot_size.toLocaleString()}</td>
+                    <td className="px-3 py-2">{ev.date_inspected}</td>
+                    <td className="px-3 py-2">{ev.companies.join(", ")}</td>
+                    <td className="px-3 py-2">{ev.released_date}</td>
+                    <td className="px-3 py-2">{ev.released_by}</td>
+                    <td className="px-3 py-2 text-right space-x-2">
+                      <a
+                        href={`${API}/api/events/${ev.id}/export/pdf?lang=${lang}`}
+                        className="text-gray-600 hover:text-gray-800 text-sm"
+                      >
+                        PDF
+                      </a>
+                      <button
+                        onClick={() => handleUnrelease(ev.id)}
+                        className="text-orange-600 hover:text-orange-800 text-sm"
+                      >
+                        {t("unrelease")}
+                      </button>
+                      {perms.can_delete_events && (
+                        <button
+                          onClick={() => deleteEvent(ev.id)}
+                          className="text-red-600 hover:text-red-800 text-sm"
+                        >
+                          {t("delete")}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <PaginationControls total={releasedProducts.length} page={releasedProdsPage} perPage={releasedProdsPerPage} setPage={setReleasedProdsPage} setPerPage={setReleasedProdsPerPage} />
           </div>
         )}
       </section>

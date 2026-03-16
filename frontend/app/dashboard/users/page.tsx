@@ -18,6 +18,7 @@ interface User {
   can_mark_addressed: boolean;
   can_edit_addressed: boolean;
   can_delete_addressed: boolean;
+  can_assign: boolean;
 }
 
 export default function SettingsPage() {
@@ -36,6 +37,7 @@ export default function SettingsPage() {
   const [newCanMarkAddressed, setNewCanMarkAddressed] = useState(true);
   const [newCanEditAddressed, setNewCanEditAddressed] = useState(true);
   const [newCanDeleteAddressed, setNewCanDeleteAddressed] = useState(true);
+  const [newCanAssign, setNewCanAssign] = useState(true);
 
   // Suggested Actions state
   const [actionsList, setActionsList] = useState<string[]>([]);
@@ -85,6 +87,7 @@ export default function SettingsPage() {
         can_mark_addressed: newCanMarkAddressed,
         can_edit_addressed: newCanEditAddressed,
         can_delete_addressed: newCanDeleteAddressed,
+        can_assign: newCanAssign,
       }),
     });
     setNewUsername("");
@@ -339,6 +342,14 @@ export default function SettingsPage() {
               />
               {t("canDeleteAddressed")}
             </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={newCanAssign}
+                onChange={(e) => setNewCanAssign(e.target.checked)}
+              />
+              {t("canAssign")}
+            </label>
           </div>
 
           <button
@@ -367,6 +378,7 @@ export default function SettingsPage() {
                   <th className="text-left px-3 py-2">{t("canMarkAddressed")}</th>
                   <th className="text-left px-3 py-2">{t("canEditAddressed")}</th>
                   <th className="text-left px-3 py-2">{t("canDeleteAddressed")}</th>
+                  <th className="text-left px-3 py-2">{t("canAssign")}</th>
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
@@ -391,6 +403,7 @@ export default function SettingsPage() {
                     <td className="px-3 py-2">{u.can_mark_addressed ? t("yes") : t("no")}</td>
                     <td className="px-3 py-2">{u.can_edit_addressed ? t("yes") : t("no")}</td>
                     <td className="px-3 py-2">{u.can_delete_addressed ? t("yes") : t("no")}</td>
+                    <td className="px-3 py-2">{u.can_assign ? t("yes") : t("no")}</td>
                     <td className="px-3 py-2 text-right">
                       {!u.is_admin && (
                         <button

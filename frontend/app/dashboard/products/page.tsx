@@ -12,6 +12,7 @@ interface Product {
   aql_level: string;
   test_details: string;
   supplier: string;
+  file: string;
   created_by: string;
   created_at: string;
 }
@@ -38,6 +39,10 @@ export default function ProductsPage() {
   const [editTestDetails, setEditTestDetails] = useState("");
   const [editSupplier, setEditSupplier] = useState("");
 
+  // File upload and preview state
+  const [newFile, setNewFile] = useState<File | null>(null);
+  const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
+
   const loadProducts = useCallback(async () => {
     const res = await fetch(`${API}/api/products?company=${company}`);
     setProducts(await res.json());
@@ -61,7 +66,7 @@ export default function ProductsPage() {
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!newName.trim()) return;
-    await fetch(`${API}/api/products`, {
+    const res = await fetch(`${API}/api/products`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -74,6 +79,13 @@ export default function ProductsPage() {
         created_by: perms.username,
       }),
     });
+    const created = await res.json();
+    if (newFile) {
+      const fd = new FormData();
+      fd.append("file", newFile);
+      await fetch(`${API}/api/products/${created.id}/file`, { method: "POST", body: fd });
+      setNewFile(null);
+    }
     setNewName("");
     setNewTestDetails("");
     setNewSupplier("");
@@ -92,6 +104,18 @@ export default function ProductsPage() {
     setEditAql(p.aql_level);
     setEditTestDetails(p.test_details || "");
     setEditSupplier(p.supplier || "");
+  }
+
+  async function uploadFile(productId: number, file: File) {
+    const fd = new FormData();
+    fd.append("file", file);
+    await fetch(`${API}/api/products/${productId}/file`, { method: "POST", body: fd });
+    loadProducts();
+  }
+
+  async function deleteFile(productId: number) {
+    await fetch(`${API}/api/products/${productId}/file`, { method: "DELETE" });
+    loadProducts();
   }
 
   async function saveEdit(id: number) {
@@ -181,6 +205,15 @@ export default function ProductsPage() {
             ))}
           </select>
         </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">{t("file")}</label>
+          <input
+            type="file"
+            accept=".pdf,.png,.jpg,.jpeg,.gif,.webp"
+            onChange={(e) => setNewFile(e.target.files?.[0] || null)}
+            className="w-full border rounded px-3 py-1.5 text-sm"
+          />
+        </div>
         <div className="col-span-2">
           <button
             type="submit"
@@ -203,6 +236,7 @@ export default function ProductsPage() {
               <th className="text-left px-3 py-2">{t("aqlLevel")}</th>
               <th className="text-left px-3 py-2">{t("testDetails")}</th>
               <th className="text-left px-3 py-2">{t("supplier")}</th>
+              <th className="text-left px-3 py-2">{t("file")}</th>
               <th className="text-left px-3 py-2">{t("dateAdded")}</th>
               <th className="text-left px-3 py-2">{t("addedBy")}</th>
               <th className="px-3 py-2"></th>
@@ -267,6 +301,15 @@ export default function ProductsPage() {
                     </select>
                   </td>
                   <td className="px-3 py-2">
+                    <input
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,.gif,.webp"
+                      onChange={(e) => { if (e.target.files?.[0]) uploadFile(p.id, e.target.files[0]); }}
+                      className="border rounded px-1 py-0.5 text-xs w-full"
+                    />
+                    {p.file && <span className="text-xs text-green-600 mt-1 block">{t("viewFile")}</span>}
+                  </td>
+                  <td className="px-3 py-2">
                     {new Date(p.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-3 py-2">{p.created_by}</td>
@@ -315,6 +358,18 @@ export default function ProductsPage() {
                     )}
                   </td>
                   <td className="px-3 py-2">
+                    {p.file ? (
+                      <button
+                        onClick={() => setPreviewProduct(p)}
+                        className="text-blue-600 hover:text-blue-800 text-sm underline"
+                      >
+                        {t("viewFile")}
+                      </button>
+                    ) : (
+                      <span className="text-gray-400">--</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
                     {new Date(p.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-3 py-2">{p.created_by}</td>
@@ -341,6 +396,56 @@ export default function ProductsPage() {
             )}
           </tbody>
         </table>
+      )}
+      {/* File Preview Modal */}
+      {previewProduct && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setPreviewProduct(null)}>
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="font-bold text-lg">{previewProduct.name} - {previewProduct.file}</h3>
+              <div className="flex items-center gap-3">
+                <a
+                  href={`${API}/api/products/${previewProduct.id}/file`}
+                  download
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 text-sm"
+                >
+                  {t("download")}
+                </a>
+                {perms.can_manage_products && (
+                  <button
+                    onClick={() => { deleteFile(previewProduct.id); setPreviewProduct(null); }}
+                    className="text-red-600 hover:text-red-800 text-sm"
+                  >
+                    {t("removeFile")}
+                  </button>
+                )}
+                <button
+                  onClick={() => setPreviewProduct(null)}
+                  className="text-gray-500 hover:text-gray-700 text-xl font-bold leading-none"
+                >
+                  x
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto p-4 flex items-center justify-center min-h-[400px]">
+              {previewProduct.file.match(/\.pdf$/i) ? (
+                <iframe
+                  src={`${API}/api/products/${previewProduct.id}/file`}
+                  className="w-full h-[75vh] border-0"
+                  title="PDF Preview"
+                />
+              ) : (
+                <img
+                  src={`${API}/api/products/${previewProduct.id}/file`}
+                  alt={previewProduct.name}
+                  className="max-w-full max-h-[75vh] object-contain"
+                />
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

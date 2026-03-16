@@ -1,11 +1,16 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 import aql
+import shutil
+
+UPLOADS_DIR = Path(__file__).parent / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
+ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp"}
 
 app = FastAPI()
 
@@ -47,6 +52,7 @@ users: dict[str, dict] = {
         "can_mark_addressed": True,
         "can_edit_addressed": True,
         "can_delete_addressed": True,
+        "can_assign": True,
     },
 }
 
@@ -75,6 +81,7 @@ class UserCreate(BaseModel):
     can_mark_addressed: bool = True
     can_edit_addressed: bool = True
     can_delete_addressed: bool = True
+    can_assign: bool = True
 
 class ProductCreate(BaseModel):
     name: str
@@ -92,6 +99,7 @@ class PendingInspectionCreate(BaseModel):
     estimated_date: str  # ISO date string e.g. "2026-03-10"
     company: str = "All"
     created_by: str = "user"
+    assigned_to: str = ""
 
 class EventCreate(BaseModel):
     product_id: int
@@ -127,6 +135,7 @@ def login(data: dict):
             "can_mark_addressed": u["can_mark_addressed"],
             "can_edit_addressed": u["can_edit_addressed"],
             "can_delete_addressed": u["can_delete_addressed"],
+            "can_assign": u.get("can_assign", True),
         }
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -158,6 +167,7 @@ def create_user(user: UserCreate):
         "can_mark_addressed": user.can_mark_addressed,
         "can_edit_addressed": user.can_edit_addressed,
         "can_delete_addressed": user.can_delete_addressed,
+        "can_assign": user.can_assign,
     }
     return {k: v for k, v in users[user.username].items() if k != "password"}
 
@@ -264,6 +274,7 @@ def create_product(product: ProductCreate):
         "aql_level": product.aql_level,
         "test_details": product.test_details,
         "supplier": product.supplier,
+        "file": "",
         "companies": companies,
         "created_by": product.created_by,
         "created_at": datetime.now().isoformat(),
@@ -292,7 +303,57 @@ def delete_product(product_id: int):
     if product_id not in products:
         raise HTTPException(status_code=404, detail="Product not found")
     deleted = products.pop(product_id)
+    # Clean up uploaded file if any
+    for f in UPLOADS_DIR.glob(f"product_{product_id}.*"):
+        f.unlink()
     return deleted
+
+
+# --- Product File Upload ---
+
+@app.post("/api/products/{product_id}/file")
+async def upload_product_file(product_id: int, file: UploadFile = File(...)):
+    if product_id not in products:
+        raise HTTPException(status_code=404, detail="Product not found")
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"File type not allowed. Use: {', '.join(ALLOWED_EXTENSIONS)}")
+    # Remove old file if any
+    for f in UPLOADS_DIR.glob(f"product_{product_id}.*"):
+        f.unlink()
+    dest = UPLOADS_DIR / f"product_{product_id}{ext}"
+    with open(dest, "wb") as buf:
+        shutil.copyfileobj(file.file, buf)
+    products[product_id]["file"] = f"product_{product_id}{ext}"
+    return {"filename": products[product_id]["file"]}
+
+@app.get("/api/products/{product_id}/file")
+def get_product_file(product_id: int):
+    if product_id not in products:
+        raise HTTPException(status_code=404, detail="Product not found")
+    fname = products[product_id].get("file")
+    if not fname:
+        raise HTTPException(status_code=404, detail="No file attached")
+    fpath = UPLOADS_DIR / fname
+    if not fpath.exists():
+        raise HTTPException(status_code=404, detail="File not found on disk")
+    import mimetypes
+    mime, _ = mimetypes.guess_type(str(fpath))
+    if mime is None:
+        mime = "application/octet-stream"
+    return FileResponse(fpath, media_type=mime, content_disposition_type="inline")
+
+@app.delete("/api/products/{product_id}/file")
+def delete_product_file(product_id: int):
+    if product_id not in products:
+        raise HTTPException(status_code=404, detail="Product not found")
+    fname = products[product_id].get("file")
+    if fname:
+        fpath = UPLOADS_DIR / fname
+        if fpath.exists():
+            fpath.unlink()
+    products[product_id]["file"] = ""
+    return {"ok": True}
 
 
 # --- Pending Inspections ---
@@ -323,6 +384,7 @@ def create_pending(p: PendingInspectionCreate):
         "estimated_date": p.estimated_date,
         "companies": companies,
         "created_by": p.created_by,
+        "assigned_to": p.assigned_to,
         "created_at": datetime.now().isoformat(),
     }
     return pending_inspections[pid]
@@ -343,6 +405,7 @@ def update_pending(pending_id: int, p: PendingInspectionCreate):
     rec["suggested_sample_size"] = aql_result["sample_size"]
     rec["estimated_date"] = p.estimated_date
     rec["companies"] = COMPANIES if p.company == "All" else [p.company]
+    rec["assigned_to"] = p.assigned_to
     return rec
 
 @app.delete("/api/pending/{pending_id}")
@@ -350,6 +413,13 @@ def delete_pending(pending_id: int):
     if pending_id not in pending_inspections:
         raise HTTPException(status_code=404, detail="Pending inspection not found")
     return pending_inspections.pop(pending_id)
+
+@app.patch("/api/pending/{pending_id}/assign")
+def assign_pending(pending_id: int, data: dict):
+    if pending_id not in pending_inspections:
+        raise HTTPException(status_code=404, detail="Pending inspection not found")
+    pending_inspections[pending_id]["assigned_to"] = data.get("assigned_to", "")
+    return pending_inspections[pending_id]
 
 
 # --- Events ---
@@ -394,6 +464,11 @@ def create_event(event: EventCreate):
         "suggested_action": "",
         "addressed": False,
         "addressed_date": "",
+        "addressed_by": "",
+        "assigned_to": "",
+        "released": False,
+        "released_date": "",
+        "released_by": "",
         "created_by": event.created_by,
         "created_at": datetime.now().isoformat(),
     }
@@ -456,6 +531,24 @@ def address_event(event_id: int, data: dict):
     addressed = data.get("addressed", True)
     events[event_id]["addressed"] = addressed
     events[event_id]["addressed_date"] = data.get("addressed_date", "") if addressed else ""
+    events[event_id]["addressed_by"] = data.get("addressed_by", "") if addressed else ""
+    return events[event_id]
+
+@app.patch("/api/events/{event_id}/assign")
+def assign_event(event_id: int, data: dict):
+    if event_id not in events:
+        raise HTTPException(status_code=404, detail="Event not found")
+    events[event_id]["assigned_to"] = data.get("assigned_to", "")
+    return events[event_id]
+
+@app.patch("/api/events/{event_id}/release")
+def release_event(event_id: int, data: dict):
+    if event_id not in events:
+        raise HTTPException(status_code=404, detail="Event not found")
+    released = data.get("released", True)
+    events[event_id]["released"] = released
+    events[event_id]["released_date"] = data.get("released_date", "") if released else ""
+    events[event_id]["released_by"] = data.get("released_by", "") if released else ""
     return events[event_id]
 
 

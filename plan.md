@@ -82,8 +82,12 @@
 - **Number formatting**: All displayed numbers use comma formatting (toLocaleString).
 - **Company logos**: VBC and VBP logos shown in nav bar, conditional on selected company.
 - **Supplier field**: Products have a supplier field selected from an admin-configurable supplier list. Suppliers managed in Settings. Cascade on delete sets supplier to "pending". Marked as REPORT VARIABLE for future reporting dashboard.
-- **Pagination**: All event sections (Pending, Failed Events, Awaiting Fix, Passed Events) paginated with 10/20/50 per-page selector and Previous/Next navigation. Pagination controls hidden when 10 or fewer items.
+- **Pagination**: All event sections (Pending, Failed Events, Awaiting Fix, Passed Events, Released Products) paginated with 10/20/50 per-page selector and Previous/Next navigation. Pagination controls hidden when 10 or fewer items.
 - **Sortable columns**: All event section tables have clickable column headers that toggle ascending/descending sort. Sort indicator arrows shown on active column.
+- **QC Technical Doc**: Product file upload field renamed from "File" to "QC Technical Doc" (EN/ES). File preview serves inline with proper MIME type instead of auto-downloading. Download opens in new browser tab.
+- **Assigned To**: Dropdown column in Pending Inspections and Awaiting Fix sections, populated with registered users. Permission-gated by `can_assign` permission.
+- **Resolved By**: Column in Passed Events showing who completed/resolved each event (`created_by` for first-pass passes, `addressed_by` for addressed fails).
+- **Released Products**: Button in Passed Events to release products (mark as shipped). Released events move to a dedicated "Released Products" section with purple header, tracking release date and releasing user. Unrelease available.
 
 ---
 

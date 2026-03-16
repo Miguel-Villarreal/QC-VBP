@@ -1,8 +1,8 @@
 # QC Inspector - Project Status
 
-## Current State: Steps 1-4 Complete + Company, i18n, PDF, User Management, Failed Events Workflow, Suppliers, Pagination, Sorting
+## Current State: Steps 1-4 Complete + Company, i18n, PDF, User Management, Failed Events Workflow, Suppliers, Pagination, Sorting, Assigned To, Released Products
 
-Steps 1 through 4 from `plan.md` are complete. The app has a working AQL engine based on ANSI/ASQ Z1.4 with corrected values from the official standard. Additional features added: multi-company support (VBC/VBP/All), English/Spanish language toggle, PDF export with Pass/Fail, user tracking on records, user management with granular permissions, failed events lifecycle (suggested actions, awaiting fix, addressed), number formatting with commas, company logos in nav bar, supplier field on products (admin-configurable, REPORT VARIABLE), pagination on all event sections (10/20/50 per page), and sortable column headers on all event tables. Ready to proceed to Step 5 (Google Sheets integration).
+Steps 1 through 4 from `plan.md` are complete. The app has a working AQL engine based on ANSI/ASQ Z1.4 with corrected values from the official standard. Additional features added: multi-company support (VBC/VBP/All), English/Spanish language toggle, PDF export with Pass/Fail, user tracking on records, user management with granular permissions, failed events lifecycle (suggested actions, awaiting fix, addressed), number formatting with commas, company logos in nav bar, supplier field on products (admin-configurable, REPORT VARIABLE), pagination on all event sections (10/20/50 per page), sortable column headers on all event tables, QC Technical Doc file upload (inline preview, new-tab download), Assigned To dropdowns in Pending/Awaiting Fix (permission-gated), Resolved By column in Passed Events, and Released Products section with release/unrelease workflow. Ready to proceed to Step 5 (Google Sheets integration).
 
 ---
 
@@ -57,7 +57,7 @@ Login: username `user`, password `password`
 ### Backend (`backend/`)
 | File | Purpose |
 |------|---------|
-| `main.py` | FastAPI application (~750 lines) |
+| `main.py` | FastAPI application (~843 lines) |
 | `aql.py` | AQL lookup utility (code letter, sample size, accept/reject) |
 | `data/aql_table.json` | Machine-readable AQL tables (from ANSI/ASQ Z1.4) |
 | `test_aql.py` | Unit tests for AQL lookups (5 tests) |
@@ -71,15 +71,15 @@ Login: username `user`, password `password`
 | `next.config.ts` | Empty config (defaults) |
 | `postcss.config.mjs` | Tailwind via `@tailwindcss/postcss` |
 | `app/globals.css` | Single line: `@import "tailwindcss"` |
-| `app/i18n.tsx` | i18n system (~290 lines, translations, I18nProvider, CompanyProvider, AuthProvider, useI18n, useCompany, useAuth hooks) |
+| `app/i18n.tsx` | i18n system (~315 lines, translations, I18nProvider, CompanyProvider, AuthProvider, useI18n, useCompany, useAuth hooks) |
 | `app/providers.tsx` | Client wrapper combining I18nProvider + AuthProvider + CompanyProvider |
 | `app/layout.tsx` | Root layout, page title "QC Inspector", wraps children with Providers |
 | `app/page.tsx` | Login page (username/password form, translated, sets company on login) |
 | `app/dashboard/layout.tsx` | Nav bar with tabs, company dropdown (or static label if restricted), language dropdown, auth check, sign out |
 | `app/dashboard/page.tsx` | Redirects to `/dashboard/products` |
-| `app/dashboard/products/page.tsx` | Master List CRUD (~347 lines) with inspection level, AQL level, supplier, company filter, permission-gated |
-| `app/dashboard/events/page.tsx` | Main events page (~1348 lines, most complex file), permission-gated actions, failed events workflow, pagination, sortable columns, Company column |
-| `app/dashboard/users/page.tsx` | Admin-only user/settings management page (~413 lines, add/delete users, suggested actions, suppliers) |
+| `app/dashboard/products/page.tsx` | Master List CRUD (~452 lines) with inspection level, AQL level, supplier, company filter, permission-gated, QC Technical Doc inline preview |
+| `app/dashboard/events/page.tsx` | Main events page (~1523 lines, most complex file), permission-gated actions, failed events workflow, pagination, sortable columns, Company column, Assigned To, Released Products |
+| `app/dashboard/users/page.tsx` | Admin-only user/settings management page (~426 lines, add/delete users with can_assign permission, suggested actions, suppliers) |
 
 ---
 
@@ -88,13 +88,13 @@ Login: username `user`, password `password`
 ### Auth
 | Method | Path | Body | Notes |
 |--------|------|------|-------|
-| POST | `/api/auth/login` | `{username, password}` | Returns `{token, username, is_admin, company_access, can_manage_products, can_edit_pending, can_delete_pending, can_edit_events, can_delete_events, can_set_suggested_action, can_mark_addressed, can_edit_addressed, can_delete_addressed}` |
+| POST | `/api/auth/login` | `{username, password}` | Returns `{token, username, is_admin, company_access, can_manage_products, can_edit_pending, can_delete_pending, can_edit_events, can_delete_events, can_set_suggested_action, can_mark_addressed, can_edit_addressed, can_delete_addressed, can_assign}` |
 
 ### Users (Admin only)
 | Method | Path | Body | Notes |
 |--------|------|------|-------|
 | GET | `/api/users` | -- | Returns all users (password excluded) |
-| POST | `/api/users` | `{username, password, company_access, can_manage_products, can_delete_pending, can_delete_events}` | Creates non-admin user |
+| POST | `/api/users` | `{username, password, company_access, can_manage_products, can_delete_pending, can_delete_events, can_assign, ...}` | Creates non-admin user with granular permissions |
 | DELETE | `/api/users/{username}` | -- | Deletes user (admin cannot be deleted) |
 
 ### Reference Data
@@ -150,6 +150,13 @@ Login: username `user`, password `password`
 | PUT | `/api/events/{id}/address` | `{addressed_date}` | Marks a failed event as addressed |
 | PUT | `/api/events/{id}/unaddress` | -- | Unmarks an addressed event |
 
+### Assignment & Release
+| Method | Path | Body | Notes |
+|--------|------|------|-------|
+| PATCH | `/api/pending/{id}/assign` | `{assigned_to}` | Assign a user to a pending inspection |
+| PATCH | `/api/events/{id}/assign` | `{assigned_to}` | Assign a user to an event (Awaiting Fix) |
+| PATCH | `/api/events/{id}/release` | `{released_by}` | Release/unrelease a passed event. Toggle: sets `released=true/false`, `released_date`, `released_by` |
+
 ### PDF Export
 | Method | Path | Notes |
 |--------|------|-------|
@@ -187,7 +194,8 @@ Login: username `user`, password `password`
     "estimated_date": str,
     "companies": list[str],        # ["VBC"], ["VBP"], or ["VBC", "VBP"]
     "created_by": str,
-    "created_at": str
+    "created_at": str,
+    "assigned_to": str|None         # user assigned to handle this inspection
 }
 ```
 
@@ -212,7 +220,12 @@ Login: username `user`, password `password`
     "created_at": str,
     "suggested_action": str|None,  # assigned from configurable suggested actions list
     "addressed": bool,             # whether the failed event has been addressed
-    "addressed_date": str|None     # date the fail was addressed
+    "addressed_date": str|None,    # date the fail was addressed
+    "addressed_by": str|None,      # user who marked as addressed
+    "assigned_to": str|None,       # user assigned to handle this event
+    "released": bool,              # whether products have been released/shipped
+    "released_date": str|None,     # date of release
+    "released_by": str|None        # user who released the products
 }
 ```
 
@@ -250,7 +263,7 @@ AQL values are sourced from ANSI/ASQ Z1.4-2003 (R2018), verified against user-pr
 - Language selection translates all visible UI text and PDF exports
 
 ### Users Page (`/dashboard/users`) -- Admin only
-- Add user form: username, password, company access dropdown, permission checkboxes (manage products, edit/delete pending, edit/delete events, set suggested action, mark/edit/delete addressed)
+- Add user form: username, password, company access dropdown, permission checkboxes (manage products, edit/delete pending, edit/delete events, set suggested action, mark/edit/delete addressed, assign users)
 - Suggested Actions management: add/delete configurable actions used in Failed Events workflow
 - Suppliers management: add/delete supplier names used in product creation (cascade on delete sets products to "pending")
 - Table: Username, Company Access, permissions columns, Delete button
@@ -259,8 +272,8 @@ AQL values are sourced from ANSI/ASQ Z1.4-2003 (R2018), verified against user-pr
 
 ### Master List (`/dashboard/products`)
 - Add product form and edit/delete buttons hidden if user lacks `can_manage_products` permission
-- Add product form: name, inspection level dropdown, AQL level dropdown, test details textarea, supplier dropdown
-- Table: ID, Name, Inspection Level, AQL Level, Test Details (truncated with hover tooltip), Supplier (orange italic if "pending"), Date Added, Added By, Edit/Delete actions
+- Add product form: name, inspection level dropdown, AQL level dropdown, test details textarea, supplier dropdown, QC Technical Doc file upload
+- Table: ID, Name, Inspection Level, AQL Level, Test Details (truncated with hover tooltip), QC Technical Doc (inline preview, download opens in new tab), Supplier (orange italic if "pending"), Date Added, Added By, Edit/Delete actions
 - Inline edit mode with Save/Cancel
 
 ### Events Page (`/dashboard/events`)
@@ -269,7 +282,7 @@ AQL values are sourced from ANSI/ASQ Z1.4-2003 (R2018), verified against user-pr
 - Product dropdown (from Master List), Direction dropdown, Lot Size input, Estimated Date picker
 
 **Pending Inspections** (table, only shown when items exist):
-- Columns: Product, Direction, Lot Size, Suggested Qty (auto-calculated), Est. Date, Company, User (all sortable)
+- Columns: Product, Direction, Lot Size, Suggested Qty (auto-calculated), Est. Date, Company, User, Assigned To (all sortable)
 - Overdue detection: rows with past dates get red background + "OVERDUE" badge
 - Actions: Inspect, Edit, Delete
 - Edit mode: inline editing with yellow background, Save/Cancel buttons
@@ -290,17 +303,26 @@ AQL values are sourced from ANSI/ASQ Z1.4-2003 (R2018), verified against user-pr
 - Pagination: 10/20/50 per page with Previous/Next controls
 
 **Awaiting Fix** (table, red title, shown above Passed Events when failed events have suggested action but not yet addressed):
-- Columns: ID, Product, Direction, Lot Size, Non-Conf., Suggested Action, Date, Company, User, Addressed Date (date picker) (all sortable except Addressed Date)
-- "Mark Addressed" button moves event to Passed Events
+- Columns: ID, Product, Direction, Lot Size, Non-Conf., Suggested Action, Date, Company, User, Assigned To, Addressed Date (date picker) (all sortable except Addressed Date)
+- "Mark Addressed" button moves event to Passed Events (records `addressed_by`)
 - Actions: Mark Addressed, PDF
 - Pagination: 10/20/50 per page with Previous/Next controls
 
-**Passed Events** (table, merges first-pass passes + addressed fails):
-- Columns: Status icon, ID, Product, Direction, Lot Size, Sample, Inspected, Non-Conf., Ac/Re, Date, Company, User (all sortable except status icon and Ac/Re)
+**Passed Events** (table, merges first-pass passes + addressed fails, excludes released):
+- Columns: Status icon, ID, Product, Direction, Lot Size, Sample, Inspected, Non-Conf., Ac/Re, Date, Company, Resolved By, Release Date (date picker, defaults to today) (all sortable except status icon, Ac/Re, Release Date)
 - Status icon column: green checkmark for first-pass passes, orange wrench for fixed (addressed) fails
+- "Resolved By" column: shows `created_by` for first-pass passes, `addressed_by` for addressed fails
+- Release Date: user-selectable date picker per row (defaults to today, can be changed before releasing)
 - Addressed events show Unaddress, Edit, Delete actions; regular events show Edit, Delete
-- Actions: PDF, Edit, Delete (permission-gated)
+- Actions: Release (purple button, uses selected release date), PDF, Edit, Delete (permission-gated)
 - All numbers formatted with commas (toLocaleString)
+- Pagination: 10/20/50 per page with Previous/Next controls
+
+**Released Products** (table, purple header, shown when released events exist):
+- Columns: Status icon, ID, Product, Direction, Lot Size, Sample, Inspected, Non-Conf., Ac/Re, Date, Company, Resolved By, Released Date, Released By (all sortable except status icon and Ac/Re)
+- Status icon column: same as Passed Events (green checkmark / orange wrench)
+- Default sort: released_date descending
+- Actions: Unrelease (purple button), PDF, Delete (permission-gated)
 - Pagination: 10/20/50 per page with Previous/Next controls
 
 ### PDF Export (Single Event Inspection Report)
@@ -346,4 +368,7 @@ Layout:
 - Sortable columns: click column header to toggle asc/desc sort. Sort arrows indicate direction. Implemented via inline `sortItems` + `SortArrow` component in events page.
 - Supplier cascade: deleting a supplier sets all products with that supplier to "pending" (shown in orange italic in UI)
 - `suppressHydrationWarning` on `<html>` tag in layout.tsx to prevent browser extension hydration mismatches
+- File serving: product files served inline with MIME type detection (`content_disposition_type="inline"`) instead of triggering download
+- Assigned To: permission-gated dropdown (renders as plain text for users without `can_assign`). Populated from `/api/users` endpoint.
+- Released Products: events with `released=true` are excluded from Passed Events and shown in dedicated Released Products section
 - GitHub repo: https://github.com/Miguel-Villarreal/QC-VBP

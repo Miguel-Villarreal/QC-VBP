@@ -131,6 +131,7 @@ const translations = {
   canMarkAddressed: { en: "Mark Addressed", es: "Marcar Atendido" },
   canEditAddressed: { en: "Edit Addressed", es: "Editar Atendidos" },
   canDeleteAddressed: { en: "Delete Addressed", es: "Eliminar Atendidos" },
+  canAssign: { en: "Assign Users", es: "Asignar Usuarios" },
 
   // Pagination
   page: { en: "Page", es: "Pagina" },
@@ -139,6 +140,28 @@ const translations = {
   next: { en: "Next", es: "Siguiente" },
   perPage: { en: "per page", es: "por pagina" },
   showing: { en: "Showing", es: "Mostrando" },
+
+  // Product files
+  file: { en: "QC Technical Doc", es: "Doc Tecnico QC" },
+  uploadFile: { en: "Upload File", es: "Subir Archivo" },
+  viewFile: { en: "View", es: "Ver" },
+  removeFile: { en: "Remove File", es: "Quitar Archivo" },
+  close: { en: "Close", es: "Cerrar" },
+  download: { en: "Download", es: "Descargar" },
+
+  // Assigned To / Resolved By
+  assignedTo: { en: "Assigned To", es: "Asignado A" },
+  resolvedBy: { en: "Resolved By", es: "Resuelto Por" },
+  unassigned: { en: "-- Unassigned --", es: "-- Sin asignar --" },
+
+  // Released Products
+  releaseProducts: { en: "Release Products", es: "Liberar Productos" },
+  releasedProducts: { en: "Released Products", es: "Productos Liberados" },
+  noReleasedProducts: { en: "No released products yet.", es: "No hay productos liberados." },
+  release: { en: "Release", es: "Liberar" },
+  unrelease: { en: "Unrelease", es: "Desliberar" },
+  releasedDate: { en: "Released Date", es: "Fecha de Liberacion" },
+  releasedBy: { en: "Released By", es: "Liberado Por" },
 } as const;
 
 export type TKey = keyof typeof translations;
@@ -236,6 +259,7 @@ export interface UserPermissions {
   can_mark_addressed: boolean;
   can_edit_addressed: boolean;
   can_delete_addressed: boolean;
+  can_assign: boolean;
 }
 
 const defaultPerms: UserPermissions = {
@@ -251,6 +275,7 @@ const defaultPerms: UserPermissions = {
   can_mark_addressed: false,
   can_edit_addressed: false,
   can_delete_addressed: false,
+  can_assign: false,
 };
 
 interface AuthContextType {
