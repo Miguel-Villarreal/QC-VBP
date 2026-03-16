@@ -6,6 +6,7 @@ from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 import aql
+import sheets
 import shutil
 
 UPLOADS_DIR = Path(__file__).parent / "uploads"
@@ -194,6 +195,7 @@ def add_suggested_action(data: dict):
     if action in suggested_actions:
         raise HTTPException(status_code=400, detail="Action already exists")
     suggested_actions.append(action)
+    sheets.sync_suggested_actions(suggested_actions)
     return suggested_actions
 
 @app.delete("/api/suggested-actions/{index}")
@@ -201,6 +203,7 @@ def delete_suggested_action(index: int):
     if index < 0 or index >= len(suggested_actions):
         raise HTTPException(status_code=404, detail="Action not found")
     removed = suggested_actions.pop(index)
+    sheets.sync_suggested_actions(suggested_actions)
     return {"removed": removed, "actions": suggested_actions}
 
 
@@ -218,6 +221,7 @@ def add_supplier(data: dict):
     if name in suppliers:
         raise HTTPException(status_code=400, detail="Supplier already exists")
     suppliers.append(name)
+    sheets.sync_suppliers(suppliers)
     return suppliers
 
 @app.delete("/api/suppliers/{index}")
@@ -229,6 +233,8 @@ def delete_supplier(index: int):
     for p in products.values():
         if p.get("supplier") == removed:
             p["supplier"] = "pending"
+    sheets.sync_products(products)
+    sheets.sync_suppliers(suppliers)
     return {"removed": removed, "suppliers": suppliers}
 
 
@@ -279,6 +285,7 @@ def create_product(product: ProductCreate):
         "created_by": product.created_by,
         "created_at": datetime.now().isoformat(),
     }
+    sheets.sync_products(products)
     return products[pid]
 
 @app.put("/api/products/{product_id}")
@@ -296,6 +303,7 @@ def update_product(product_id: int, product: ProductCreate):
     rec["test_details"] = product.test_details
     rec["supplier"] = product.supplier
     rec["companies"] = COMPANIES if product.company == "All" else [product.company]
+    sheets.sync_products(products)
     return rec
 
 @app.delete("/api/products/{product_id}")
@@ -306,6 +314,7 @@ def delete_product(product_id: int):
     # Clean up uploaded file if any
     for f in UPLOADS_DIR.glob(f"product_{product_id}.*"):
         f.unlink()
+    sheets.sync_products(products)
     return deleted
 
 
@@ -387,6 +396,7 @@ def create_pending(p: PendingInspectionCreate):
         "assigned_to": p.assigned_to,
         "created_at": datetime.now().isoformat(),
     }
+    sheets.sync_pending(pending_inspections)
     return pending_inspections[pid]
 
 @app.put("/api/pending/{pending_id}")
@@ -406,19 +416,23 @@ def update_pending(pending_id: int, p: PendingInspectionCreate):
     rec["estimated_date"] = p.estimated_date
     rec["companies"] = COMPANIES if p.company == "All" else [p.company]
     rec["assigned_to"] = p.assigned_to
+    sheets.sync_pending(pending_inspections)
     return rec
 
 @app.delete("/api/pending/{pending_id}")
 def delete_pending(pending_id: int):
     if pending_id not in pending_inspections:
         raise HTTPException(status_code=404, detail="Pending inspection not found")
-    return pending_inspections.pop(pending_id)
+    deleted = pending_inspections.pop(pending_id)
+    sheets.sync_pending(pending_inspections)
+    return deleted
 
 @app.patch("/api/pending/{pending_id}/assign")
 def assign_pending(pending_id: int, data: dict):
     if pending_id not in pending_inspections:
         raise HTTPException(status_code=404, detail="Pending inspection not found")
     pending_inspections[pending_id]["assigned_to"] = data.get("assigned_to", "")
+    sheets.sync_pending(pending_inspections)
     return pending_inspections[pending_id]
 
 
@@ -474,6 +488,8 @@ def create_event(event: EventCreate):
     }
     if event.pending_id and event.pending_id in pending_inspections:
         pending_inspections.pop(event.pending_id)
+        sheets.sync_pending(pending_inspections)
+    sheets.sync_events(events)
     return events[eid]
 
 class EventUpdate(BaseModel):
@@ -509,19 +525,23 @@ def update_event(event_id: int, event: EventUpdate):
     rec["reject_number"] = aql_result["reject"]
     rec["code_letter"] = aql_result["code_letter"]
     rec["date_inspected"] = event.date_inspected
+    sheets.sync_events(events)
     return rec
 
 @app.delete("/api/events/{event_id}")
 def delete_event(event_id: int):
     if event_id not in events:
         raise HTTPException(status_code=404, detail="Event not found")
-    return events.pop(event_id)
+    deleted = events.pop(event_id)
+    sheets.sync_events(events)
+    return deleted
 
 @app.patch("/api/events/{event_id}/suggested-action")
 def set_suggested_action(event_id: int, data: dict):
     if event_id not in events:
         raise HTTPException(status_code=404, detail="Event not found")
     events[event_id]["suggested_action"] = data.get("suggested_action", "")
+    sheets.sync_events(events)
     return events[event_id]
 
 @app.patch("/api/events/{event_id}/address")
@@ -532,6 +552,7 @@ def address_event(event_id: int, data: dict):
     events[event_id]["addressed"] = addressed
     events[event_id]["addressed_date"] = data.get("addressed_date", "") if addressed else ""
     events[event_id]["addressed_by"] = data.get("addressed_by", "") if addressed else ""
+    sheets.sync_events(events)
     return events[event_id]
 
 @app.patch("/api/events/{event_id}/assign")
@@ -539,6 +560,7 @@ def assign_event(event_id: int, data: dict):
     if event_id not in events:
         raise HTTPException(status_code=404, detail="Event not found")
     events[event_id]["assigned_to"] = data.get("assigned_to", "")
+    sheets.sync_events(events)
     return events[event_id]
 
 @app.patch("/api/events/{event_id}/release")
@@ -549,6 +571,7 @@ def release_event(event_id: int, data: dict):
     events[event_id]["released"] = released
     events[event_id]["released_date"] = data.get("released_date", "") if released else ""
     events[event_id]["released_by"] = data.get("released_by", "") if released else ""
+    sheets.sync_events(events)
     return events[event_id]
 
 
@@ -836,6 +859,19 @@ def export_single_event_pdf(event_id: int, lang: str = "en"):
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# --- Google Sheets Integration ---
+
+@app.get("/api/sheets/status")
+def sheets_status():
+    return sheets.get_status()
+
+@app.post("/api/sheets/connect")
+def sheets_connect():
+    """Connect to the configured Google Sheet."""
+    sheets.ensure_connected()
+    return sheets.get_status()
 
 
 if __name__ == "__main__":

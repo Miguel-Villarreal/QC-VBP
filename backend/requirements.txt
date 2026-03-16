@@ -2,3 +2,5 @@ fastapi
 uvicorn[standard]
 reportlab
 python-multipart
+gspread
+google-auth

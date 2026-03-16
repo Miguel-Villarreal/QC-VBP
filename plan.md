@@ -91,27 +91,34 @@
 
 ---
 
-## Step 5: Spreadsheet Integration
+## Step 5: Spreadsheet Integration -- COMPLETE
 
 **Goal**: Generate and maintain a spreadsheet that reflects all Events and Master List data, integrated with Google Drive.
 
-### Tasks
-1. Evaluate approach: generate `.xlsx` file on each change using `openpyxl`, upload via Google Drive API
-   - Alternative: use Google Sheets API directly to write cells
-   - Decision: Use Google Sheets API for true dynamic updating
-2. Set up Google Cloud service account with Sheets API access
-3. On every event creation or master list change, update the Google Sheet:
-   - Sheet 1: Master List (product names, date added)
-   - Sheet 2: Events log (all event fields including pass/fail result)
-4. Provide configuration for the Google Sheet ID and service account credentials
+### Completed
+- Google Sheets API via `gspread` library with service account authentication
+- Service account: `qc-inspector@qc-inspector-490421.iam.gserviceaccount.com`
+- Connected to user-created Google Sheet (ID: `1UGkWVxGPviinHZCspemdirrVHOxscDbmsvsPi-yRwqo`)
+- Full-overwrite sync strategy: clear tab + rewrite all rows on every mutation
+- Lazy connection via `ensure_connected()` on first use
+- 6 Spanish-named tabs synced automatically:
+  - **Lista Maestra**: Products from Master List (ID, Nombre, Nivel de Inspeccion, Nivel AQL, Proveedor, Empresa, Creado Por, Fecha de Alta, Detalles de Prueba)
+  - **Inspecciones Pendientes**: Pending inspections (ID, Producto, Direccion, Tamano de Lote, Cant. Sugerida, Fecha Est., Empresa, Creado Por, Asignado A)
+  - **Eventos Fallidos**: Failed events without suggested action
+  - **En Espera de Correccion**: Failed events with suggested action, not yet addressed
+  - **Eventos Aprobados**: Passed events + addressed fails
+  - **Productos Liberados**: Released products with release date/user
+- All tab names, column headers, and data values always in Spanish (independent of web app language setting)
+- Events automatically move between tabs as status changes (including reversions)
+- Manual edits to the sheet are overwritten on next web app sync
+- Sync hooks added to all relevant backend endpoints (create/update/delete products, pending, events, actions, addressing, assigning, releasing)
+- New endpoints: `GET /api/sheets/status`, `POST /api/sheets/connect`
 
-### Milestone
-- Changes in the app are reflected in the Google Sheet within seconds
-- Sheet is readable and well-formatted
-
-### Tests
-- Add product -> verify it appears in Sheet 1
-- Create event -> verify it appears in Sheet 2 with correct pass/fail
+### Sub-plan status
+- 5.1 Master List sync: COMPLETE
+- 5.2 Pending Inspections sync: COMPLETE
+- 5.3 Event tabs sync (4 tabs): COMPLETE
+- 5.4 Formatting & Polish (frozen headers, column widths, conditional formatting): NOT STARTED (optional)
 
 ---
 

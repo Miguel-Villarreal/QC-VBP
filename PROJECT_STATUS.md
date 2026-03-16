@@ -1,8 +1,8 @@
 # QC Inspector - Project Status
 
-## Current State: Steps 1-4 Complete + Company, i18n, PDF, User Management, Failed Events Workflow, Suppliers, Pagination, Sorting, Assigned To, Released Products
+## Current State: Steps 1-5 Complete + Company, i18n, PDF, User Management, Failed Events Workflow, Suppliers, Pagination, Sorting, Assigned To, Released Products, Google Sheets
 
-Steps 1 through 4 from `plan.md` are complete. The app has a working AQL engine based on ANSI/ASQ Z1.4 with corrected values from the official standard. Additional features added: multi-company support (VBC/VBP/All), English/Spanish language toggle, PDF export with Pass/Fail, user tracking on records, user management with granular permissions, failed events lifecycle (suggested actions, awaiting fix, addressed), number formatting with commas, company logos in nav bar, supplier field on products (admin-configurable, REPORT VARIABLE), pagination on all event sections (10/20/50 per page), sortable column headers on all event tables, QC Technical Doc file upload (inline preview, new-tab download), Assigned To dropdowns in Pending/Awaiting Fix (permission-gated), Resolved By column in Passed Events, and Released Products section with release/unrelease workflow. Ready to proceed to Step 5 (Google Sheets integration).
+Steps 1 through 5 from `plan.md` are complete. The app has a working AQL engine based on ANSI/ASQ Z1.4 with corrected values from the official standard. Additional features added: multi-company support (VBC/VBP/All), English/Spanish language toggle, PDF export with Pass/Fail, user tracking on records, user management with granular permissions, failed events lifecycle (suggested actions, awaiting fix, addressed), number formatting with commas, company logos in nav bar, supplier field on products (admin-configurable, REPORT VARIABLE), pagination on all event sections (10/20/50 per page), sortable column headers on all event tables, QC Technical Doc file upload (inline preview, new-tab download), Assigned To dropdowns in Pending/Awaiting Fix (permission-gated), Resolved By column in Passed Events, Released Products section with release/unrelease workflow, and Google Sheets integration (6 Spanish-named tabs synced on every mutation via gspread). Ready to proceed to Step 6 (SQLite persistence, JWT auth, Docker).
 
 ---
 
@@ -57,11 +57,13 @@ Login: username `user`, password `password`
 ### Backend (`backend/`)
 | File | Purpose |
 |------|---------|
-| `main.py` | FastAPI application (~843 lines) |
+| `main.py` | FastAPI application (~875 lines) |
 | `aql.py` | AQL lookup utility (code letter, sample size, accept/reject) |
 | `data/aql_table.json` | Machine-readable AQL tables (from ANSI/ASQ Z1.4) |
 | `test_aql.py` | Unit tests for AQL lookups (5 tests) |
-| `requirements.txt` | Python deps: `fastapi`, `uvicorn[standard]`, `reportlab` |
+| `sheets.py` | Google Sheets integration (~336 lines): auth, connection, sync functions for 6 tabs |
+| `credentials/service_account.json` | Google Cloud service account credentials for Sheets API |
+| `requirements.txt` | Python deps: `fastapi`, `uvicorn[standard]`, `reportlab`, `gspread`, `google-auth` |
 
 ### Frontend (`frontend/`)
 | File | Purpose |
@@ -156,6 +158,12 @@ Login: username `user`, password `password`
 | PATCH | `/api/pending/{id}/assign` | `{assigned_to}` | Assign a user to a pending inspection |
 | PATCH | `/api/events/{id}/assign` | `{assigned_to}` | Assign a user to an event (Awaiting Fix) |
 | PATCH | `/api/events/{id}/release` | `{released_by}` | Release/unrelease a passed event. Toggle: sets `released=true/false`, `released_date`, `released_by` |
+
+### Google Sheets
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/api/sheets/status` | Returns connection status, spreadsheet ID/URL/title, credentials found |
+| POST | `/api/sheets/connect` | `{spreadsheet_id}` Connects to a Google Sheet by ID |
 
 ### PDF Export
 | Method | Path | Notes |
@@ -347,7 +355,7 @@ Layout:
 | 2 | Research AQL levels (ANSI/ASQ Z1.4 / ISO 2859-1) | COMPLETE |
 | 3 | Convert AQL table to JSON (`backend/data/aql_table.json`) | COMPLETE |
 | 4 | Connect AQL to Events (dropdowns, auto-calculate pass/fail, populate Suggested Qty) | COMPLETE |
-| 5 | Google Sheets integration for dynamic spreadsheet updates | NOT STARTED |
+| 5 | Google Sheets integration (6 Spanish tabs, full sync on every mutation) | COMPLETE |
 | 6 | SQLite persistence, JWT auth, Docker container, start/stop scripts | NOT STARTED |
 
 ---
@@ -371,4 +379,5 @@ Layout:
 - File serving: product files served inline with MIME type detection (`content_disposition_type="inline"`) instead of triggering download
 - Assigned To: permission-gated dropdown (renders as plain text for users without `can_assign`). Populated from `/api/users` endpoint.
 - Released Products: events with `released=true` are excluded from Passed Events and shown in dedicated Released Products section
+- Google Sheets: connected to spreadsheet ID `1UGkWVxGPviinHZCspemdirrVHOxscDbmsvsPi-yRwqo` via service account. Full-overwrite sync (clear + rewrite) on every data mutation. All content always in Spanish regardless of web app language. 6 tabs: Lista Maestra, Inspecciones Pendientes, Eventos Fallidos, En Espera de Correccion, Eventos Aprobados, Productos Liberados.
 - GitHub repo: https://github.com/Miguel-Villarreal/QC-VBP
