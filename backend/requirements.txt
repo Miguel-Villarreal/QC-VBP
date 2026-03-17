@@ -4,3 +4,5 @@ reportlab
 python-multipart
 gspread
 google-auth
+pyjwt
+bcrypt

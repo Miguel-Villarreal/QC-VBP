@@ -1,39 +1,50 @@
 # QC Inspector - Project Status
 
-## Current State: Steps 1-5 Complete + Company, i18n, PDF, User Management, Failed Events Workflow, Suppliers, Pagination, Sorting, Assigned To, Released Products, Google Sheets
+## Current State: Steps 1-7 Complete -- Fully Deployed
 
-Steps 1 through 5 from `plan.md` are complete. The app has a working AQL engine based on ANSI/ASQ Z1.4 with corrected values from the official standard. Additional features added: multi-company support (VBC/VBP/All), English/Spanish language toggle, PDF export with Pass/Fail, user tracking on records, user management with granular permissions, failed events lifecycle (suggested actions, awaiting fix, addressed), number formatting with commas, company logos in nav bar, supplier field on products (admin-configurable, REPORT VARIABLE), pagination on all event sections (10/20/50 per page), sortable column headers on all event tables, QC Technical Doc file upload (inline preview, new-tab download), Assigned To dropdowns in Pending/Awaiting Fix (permission-gated), Resolved By column in Passed Events, Released Products section with release/unrelease workflow, and Google Sheets integration (6 Spanish-named tabs synced on every mutation via gspread). Ready to proceed to Step 6 (SQLite persistence, JWT auth, Docker).
+All 7 steps from `plan.md` are complete. The app is live at `https://qc-inspector-vbp.fly.dev`. Data persists in SQLite with JWT authentication. All prior features intact: AQL engine (ANSI/ASQ Z1.4), multi-company (VBC/VBP/All), i18n (EN/ES), PDF export, user management with granular permissions, failed events lifecycle, suppliers, pagination, sortable columns, Assigned To, Released Products, Google Sheets integration (8 Spanish tabs). Dockerized and deployed to Fly.io free tier.
 
 ---
 
 ## Architecture
 
-- **Frontend**: Next.js 15 (App Router) + React 19 + Tailwind CSS v4 -- dev server on port 3000
-- **Backend**: Python FastAPI with in-memory dicts -- runs on port 8001
-- **Auth**: In-memory user store. Default admin: user/password. Admin can add/delete users with granular permissions. Token + permissions stored in localStorage
+- **Frontend**: Next.js 15 (App Router) + React 19 + Tailwind CSS v4 -- static export served by backend. Dev server on port 3000.
+- **Backend**: Python FastAPI with SQLite database -- runs on port 8001
+- **Database**: SQLite with WAL mode. DB file at `backend/data/qc.db` (configurable via `DB_PATH` env var). 6 tables: users, products, events, pending_inspections, suggested_actions, suppliers.
+- **Auth**: JWT tokens (24h expiry) via pyjwt + bcrypt password hashing. All `/api/*` routes protected except `/api/auth/login`. Token accepted via `Authorization: Bearer` header or `?token=` query param. Default admin: user/password (seeded on first run).
 - **i18n**: English/Spanish toggle via React Context, persisted in localStorage. PDFs also respect language setting.
 - **Company**: Multi-company support (VBC, VBP, All). Each product/event/pending inspection is tagged with companies. Dropdown in nav bar filters all views and creates. Users with restricted company_access see only their company (no dropdown).
-- **No persistence**: All data resets on backend restart
+- **Persistence**: SQLite DB + file uploads survive backend restarts. Docker volumes for production.
+- **Hosting**: Fly.io free tier at `https://qc-inspector-vbp.fly.dev`. Persistent volume at `/data`.
 
 ---
 
 ## How to Run
 
-### Backend
+### Local Development
 ```bash
+# Backend
 cd backend
 pip install -r requirements.txt
 python main.py
 # Runs on http://localhost:8001
-```
 
-### Frontend
-```bash
+# Frontend (separate terminal)
 cd frontend
 npm install
 npm run dev
 # Runs on http://localhost:3000
 ```
+
+### Docker (local)
+```bash
+scripts/start.sh   # Mac/Linux
+scripts/start.bat   # Windows
+# App at http://localhost:8001 (frontend + backend combined)
+```
+
+### Production
+Live at `https://qc-inspector-vbp.fly.dev`. Redeploy with `flyctl deploy`.
 
 Login: username `user`, password `password`
 
@@ -45,52 +56,71 @@ Login: username `user`, password `password`
 | File | Purpose |
 |------|---------|
 | `AGENTS.md` | Business requirements and coding standards |
-| `plan.md` | 6-step development plan with milestones and tests |
+| `plan.md` | 7-step development plan with milestones and tests |
 | `PROJECT_STATUS.md` | This file |
 | `AQL_TABLES.md` | Human-readable AQL reference tables (verified against standard) |
 | `AQL Chart.xlsx` | User-provided spreadsheet with correct Ac/Re values (source of truth) |
 | `Event Display Output Template.pdf` | **Template for single-event PDF export** -- when updated, code must be updated to match (see PDF Export section) |
 | `VB Packaging Logo.JPG` | Company logo (copy also at `backend/data/logo.jpg`) |
+| `Dockerfile` | Multi-stage Docker build (Node 20 + Python 3.12-slim with uv) |
+| `docker-compose.yml` | Single service with volumes for SQLite DB + uploads |
+| `.dockerignore` | Excludes node_modules, .next, __pycache__, .git |
+| `fly.toml` | Fly.io deployment config (app: qc-inspector-vbp, region: dfw) |
 | `frontend/public/logo_VBC.png` | VBC logo for nav bar |
 | `frontend/public/logo_VBP.jpg` | VBP logo for nav bar |
 
 ### Backend (`backend/`)
 | File | Purpose |
 |------|---------|
-| `main.py` | FastAPI application (~875 lines) |
+| `main.py` | FastAPI application (~821 lines), all routes JWT-protected |
+| `database.py` | SQLite layer (~547 lines): 6 tables, CRUD, sheets-compatible getters |
+| `auth.py` | JWT + bcrypt auth (~50 lines): hash/verify password, create/decode token, require_auth dependency |
 | `aql.py` | AQL lookup utility (code letter, sample size, accept/reject) |
 | `data/aql_table.json` | Machine-readable AQL tables (from ANSI/ASQ Z1.4) |
+| `data/qc.db` | SQLite database (created on first run, not in git) |
 | `test_aql.py` | Unit tests for AQL lookups (5 tests) |
-| `sheets.py` | Google Sheets integration (~336 lines): auth, connection, sync functions for 6 tabs |
+| `sheets.py` | Google Sheets integration (~370 lines): auth, connection, sync functions for 8 tabs |
 | `credentials/service_account.json` | Google Cloud service account credentials for Sheets API |
-| `requirements.txt` | Python deps: `fastapi`, `uvicorn[standard]`, `reportlab`, `gspread`, `google-auth` |
+| `uploads/` | Uploaded QC Technical Doc files (persisted) |
+| `requirements.txt` | Python deps: `fastapi`, `uvicorn[standard]`, `reportlab`, `python-multipart`, `gspread`, `google-auth`, `pyjwt`, `bcrypt` |
 
 ### Frontend (`frontend/`)
 | File | Purpose |
 |------|---------|
 | `package.json` | Next.js 15, React 19, Tailwind v4 |
 | `tsconfig.json` | TypeScript config (ES2017 target, bundler resolution) |
-| `next.config.ts` | Empty config (defaults) |
+| `next.config.ts` | Config with `output: "export"` for static build |
 | `postcss.config.mjs` | Tailwind via `@tailwindcss/postcss` |
 | `app/globals.css` | Single line: `@import "tailwindcss"` |
+| `app/api.ts` | Auth fetch wrapper (~43 lines): `apiFetch()` adds JWT header, `apiUrl()` adds token query param |
 | `app/i18n.tsx` | i18n system (~315 lines, translations, I18nProvider, CompanyProvider, AuthProvider, useI18n, useCompany, useAuth hooks) |
 | `app/providers.tsx` | Client wrapper combining I18nProvider + AuthProvider + CompanyProvider |
 | `app/layout.tsx` | Root layout, page title "QC Inspector", wraps children with Providers |
 | `app/page.tsx` | Login page (username/password form, translated, sets company on login) |
 | `app/dashboard/layout.tsx` | Nav bar with tabs, company dropdown (or static label if restricted), language dropdown, auth check, sign out |
 | `app/dashboard/page.tsx` | Redirects to `/dashboard/products` |
-| `app/dashboard/products/page.tsx` | Master List CRUD (~452 lines) with inspection level, AQL level, supplier, company filter, permission-gated, QC Technical Doc inline preview |
-| `app/dashboard/events/page.tsx` | Main events page (~1523 lines, most complex file), permission-gated actions, failed events workflow, pagination, sortable columns, Company column, Assigned To, Released Products |
-| `app/dashboard/users/page.tsx` | Admin-only user/settings management page (~426 lines, add/delete users with can_assign permission, suggested actions, suppliers) |
+| `app/dashboard/products/page.tsx` | Master List CRUD (~451 lines) with inspection level, AQL level, supplier, company filter, permission-gated, QC Technical Doc inline preview |
+| `app/dashboard/events/page.tsx` | Main events page (~1522 lines, most complex file), permission-gated actions, failed events workflow, pagination, sortable columns, Company column, Assigned To, Released Products |
+| `app/dashboard/users/page.tsx` | Admin-only user/settings management page (~425 lines, add/delete users with can_assign permission, suggested actions, suppliers) |
+
+### Scripts (`scripts/`)
+| File | Purpose |
+|------|---------|
+| `start.sh` | Start Docker container (Mac/Linux) |
+| `stop.sh` | Stop Docker container (Mac/Linux) |
+| `start.bat` | Start Docker container (Windows) |
+| `stop.bat` | Stop Docker container (Windows) |
 
 ---
 
 ## API Endpoints
 
+**All endpoints except `/api/auth/login` require JWT authentication.** Pass `Authorization: Bearer <token>` header or `?token=<token>` query param.
+
 ### Auth
 | Method | Path | Body | Notes |
 |--------|------|------|-------|
-| POST | `/api/auth/login` | `{username, password}` | Returns `{token, username, is_admin, company_access, can_manage_products, can_edit_pending, can_delete_pending, can_edit_events, can_delete_events, can_set_suggested_action, can_mark_addressed, can_edit_addressed, can_delete_addressed, can_assign}` |
+| POST | `/api/auth/login` | `{username, password}` | Returns JWT token + `{token, username, is_admin, company_access, can_manage_products, can_edit_pending, can_delete_pending, can_edit_events, can_delete_events, can_set_suggested_action, can_mark_addressed, can_edit_addressed, can_delete_addressed, can_assign}` |
 
 ### Users (Admin only)
 | Method | Path | Body | Notes |
@@ -347,7 +377,7 @@ Layout:
 
 ---
 
-## Remaining Steps (from plan.md)
+## Steps (from plan.md)
 
 | Step | Description | Status |
 |------|-------------|--------|
@@ -355,15 +385,24 @@ Layout:
 | 2 | Research AQL levels (ANSI/ASQ Z1.4 / ISO 2859-1) | COMPLETE |
 | 3 | Convert AQL table to JSON (`backend/data/aql_table.json`) | COMPLETE |
 | 4 | Connect AQL to Events (dropdowns, auto-calculate pass/fail, populate Suggested Qty) | COMPLETE |
-| 5 | Google Sheets integration (6 Spanish tabs, full sync on every mutation) | COMPLETE |
-| 6 | SQLite persistence, JWT auth, Docker container, start/stop scripts | NOT STARTED |
+| 5 | Google Sheets integration (8 Spanish tabs, full sync on every mutation) | COMPLETE |
+| 6 | SQLite persistence, JWT auth, Docker container, start/stop scripts | COMPLETE |
+| 7 | Cloud deployment to Fly.io (`https://qc-inspector-vbp.fly.dev`) | COMPLETE |
 
 ---
 
 ## Technical Notes
 
 - Backend uses port 8001 (port 8000 was occupied by another app)
-- Frontend API URL configured via `NEXT_PUBLIC_API_URL` env var, defaults to `http://localhost:8001`
+- Frontend API URL configured via `NEXT_PUBLIC_API_URL` env var, defaults to `http://localhost:8001`. Set to empty string for Docker (same-origin).
+- Frontend uses `apiFetch()` wrapper (from `app/api.ts`) for all authenticated API calls. `apiUrl()` used for href/iframe/img that need token as query param.
+- SQLite DB path configurable via `DB_PATH` env var (default: `backend/data/qc.db`). Uploads dir via `UPLOADS_DIR` env var (default: `backend/uploads/`).
+- JWT secret configurable via `JWT_SECRET` env var. Tokens expire after 24 hours.
+- `companies` field stored as JSON string in SQLite (e.g. `'["VBC"]'`), deserialized on read.
+- Database uses WAL mode for better concurrent read performance.
+- passlib was NOT used due to incompatibility with Python 3.14 + bcrypt 5.x. Using `bcrypt` library directly instead.
+- Next.js configured with `output: "export"` for static build. The `out/` directory is copied to `backend/static/` in Docker.
+- Fly.io deployment: single 1GB shared VM in `dfw` region, persistent volume at `/data`, auto-stop/start enabled.
 - Tailwind v4 uses the new `@tailwindcss/postcss` plugin pattern (not the v3 config approach)
 - All frontend pages are `"use client"` components
 - Container width on events page is `max-w-5xl`
@@ -379,5 +418,6 @@ Layout:
 - File serving: product files served inline with MIME type detection (`content_disposition_type="inline"`) instead of triggering download
 - Assigned To: permission-gated dropdown (renders as plain text for users without `can_assign`). Populated from `/api/users` endpoint.
 - Released Products: events with `released=true` are excluded from Passed Events and shown in dedicated Released Products section
-- Google Sheets: connected to spreadsheet ID `1UGkWVxGPviinHZCspemdirrVHOxscDbmsvsPi-yRwqo` via service account. Full-overwrite sync (clear + rewrite) on every data mutation. All content always in Spanish regardless of web app language. 6 tabs: Lista Maestra, Inspecciones Pendientes, Eventos Fallidos, En Espera de Correccion, Eventos Aprobados, Productos Liberados.
+- Google Sheets: connected to spreadsheet ID `1UGkWVxGPviinHZCspemdirrVHOxscDbmsvsPi-yRwqo` via service account. Full-overwrite sync (clear + rewrite) on every data mutation. All content always in Spanish regardless of web app language. 8 tabs: Lista Maestra, Inspecciones Pendientes, Eventos Fallidos, En Espera de Correccion, Eventos Aprobados, Productos Liberados, Acciones Sugeridas, Proveedores.
 - GitHub repo: https://github.com/Miguel-Villarreal/QC-VBP
+- Production URL: https://qc-inspector-vbp.fly.dev

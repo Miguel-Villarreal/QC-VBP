@@ -6,7 +6,8 @@
 - **Backend**: Python FastAPI
 - **Database**: SQLite (local persistence, simple, no extra services)
 - **Packaging**: Single Docker container using `uv` for Python dependencies
-- **Auth**: In-memory user store with admin user. Admin can add/delete users with granular permissions
+- **Auth**: SQLite user store with bcrypt password hashing + JWT tokens (24h expiry). Admin can add/delete users with granular permissions
+- **Hosting**: Fly.io (free tier), deployed at `https://qc-inspector-vbp.fly.dev`
 
 ## Step 1: Build Initial Testable Instance (No Persistence)
 
@@ -101,13 +102,15 @@
 - Connected to user-created Google Sheet (ID: `1UGkWVxGPviinHZCspemdirrVHOxscDbmsvsPi-yRwqo`)
 - Full-overwrite sync strategy: clear tab + rewrite all rows on every mutation
 - Lazy connection via `ensure_connected()` on first use
-- 6 Spanish-named tabs synced automatically:
+- 8 Spanish-named tabs synced automatically:
   - **Lista Maestra**: Products from Master List (ID, Nombre, Nivel de Inspeccion, Nivel AQL, Proveedor, Empresa, Creado Por, Fecha de Alta, Detalles de Prueba)
   - **Inspecciones Pendientes**: Pending inspections (ID, Producto, Direccion, Tamano de Lote, Cant. Sugerida, Fecha Est., Empresa, Creado Por, Asignado A)
   - **Eventos Fallidos**: Failed events without suggested action
   - **En Espera de Correccion**: Failed events with suggested action, not yet addressed
   - **Eventos Aprobados**: Passed events + addressed fails
   - **Productos Liberados**: Released products with release date/user
+  - **Acciones Sugeridas**: Configurable suggested actions list
+  - **Proveedores**: Configurable suppliers list
 - All tab names, column headers, and data values always in Spanish (independent of web app language setting)
 - Events automatically move between tabs as status changes (including reversions)
 - Manual edits to the sheet are overwritten on next web app sync
@@ -122,31 +125,45 @@
 
 ---
 
-## Step 6: Persistence and Authentication
+## Step 6: Persistence and Authentication -- COMPLETE
 
 **Goal**: Data survives restarts. User login is enforced.
 
-### Tasks
-1. Replace in-memory storage with SQLite database
-   - Tables: `users`, `products`, `events`
-   - Schema supports multiple users (MVP uses one hardcoded)
-2. Add JWT-based auth:
-   - `POST /api/auth/login` -- validates credentials, returns JWT
-   - Middleware protects all `/api/*` routes
-3. Seed database with default user (`user` / `password`)
-4. Dockerize everything:
-   - Multi-stage build: build Next.js static files, then copy into Python image
-   - FastAPI serves static files at `/`
-   - SQLite database stored in a Docker volume for persistence
-5. Create start/stop scripts in `scripts/` for Mac, PC, Linux
+### Completed
+- Replaced in-memory storage with SQLite database (`backend/database.py`, 6 tables: users, products, events, pending_inspections, suggested_actions, suppliers)
+- Added JWT-based auth (`backend/auth.py`): bcrypt password hashing, 24h token expiry, `Authorization: Bearer` header on all API calls
+- All `/api/*` routes protected with `Depends(auth.require_auth)` except `/api/auth/login`
+- Token also accepted via `?token=` query parameter (for PDF download links, file preview iframes, img src)
+- Frontend `apiFetch()` wrapper (`frontend/app/api.ts`) auto-injects Authorization header + redirects to login on 401
+- Frontend `apiUrl()` helper appends token as query param for href/iframe/img elements
+- Seed database with default admin user (`user` / `password`) on first run
+- Dockerized: multi-stage build (Node 20 + Python 3.12-slim with uv), FastAPI serves static Next.js export at `/`
+- Docker volumes for SQLite DB and uploads persistence
+- Start/stop scripts: `scripts/start.sh`, `scripts/stop.sh` (Mac/Linux), `scripts/start.bat`, `scripts/stop.bat` (Windows)
+- `companies` list stored as JSON string column in SQLite
+- WAL mode enabled for better read performance
+- `UPLOADS_DIR` and `DB_PATH` configurable via environment variables
 
-### Milestone
-- App runs in Docker, data persists across container restarts
-- Login required to access any functionality
-- Start/stop scripts work on all three platforms
-
-### Tests
-- Create data, restart container, verify data persists
+### Tests (all verified)
+- Create data, restart backend, verify data persists
 - Access API without token -> 401
-- Login with wrong credentials -> rejected
-- Login with correct credentials -> access granted
+- Login with wrong credentials -> 401
+- Login with correct credentials -> JWT returned, access granted
+- Token via query param works for file/PDF access
+- TypeScript compiles cleanly, Next.js static export builds
+- All 5 AQL unit tests pass
+
+---
+
+## Step 7: Cloud Deployment (Fly.io) -- COMPLETE
+
+**Goal**: App accessible online without running locally.
+
+### Completed
+- Deployed to Fly.io free tier at `https://qc-inspector-vbp.fly.dev`
+- `fly.toml` config: app `qc-inspector-vbp`, region `dfw`, 1GB shared VM
+- Persistent volume `qc_data` mounted at `/data` (holds SQLite DB + uploads)
+- `DB_PATH=/data/qc.db` and `UPLOADS_DIR=/data/uploads` set via env vars
+- `JWT_SECRET` set via `flyctl secrets set`
+- Auto-stop/start machines enabled (sleeps when idle, wakes on request)
+- Redeploy with `flyctl deploy` from project root

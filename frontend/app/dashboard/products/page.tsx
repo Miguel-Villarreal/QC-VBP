@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useI18n, useCompany, useAuth } from "../../i18n";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+import { apiFetch, apiUrl } from "../../api";
 
 interface Product {
   id: number;
@@ -44,16 +43,16 @@ export default function ProductsPage() {
   const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
 
   const loadProducts = useCallback(async () => {
-    const res = await fetch(`${API}/api/products?company=${company}`);
+    const res = await apiFetch(`/api/products?company=${company}`);
     setProducts(await res.json());
   }, [company]);
 
   useEffect(() => {
     loadProducts();
     Promise.all([
-      fetch(`${API}/api/aql-levels`).then((r) => r.json()),
-      fetch(`${API}/api/inspection-levels`).then((r) => r.json()),
-      fetch(`${API}/api/suppliers`).then((r) => r.json()).catch(() => []),
+      apiFetch(`/api/aql-levels`).then((r) => r.json()),
+      apiFetch(`/api/inspection-levels`).then((r) => r.json()),
+      apiFetch(`/api/suppliers`).then((r) => r.json()).catch(() => []),
     ]).then(([aqls, insps, supps]) => {
       setAqlLevels(aqls);
       setNewAql(aqls[0] || "");
@@ -66,7 +65,7 @@ export default function ProductsPage() {
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!newName.trim()) return;
-    const res = await fetch(`${API}/api/products`, {
+    const res = await apiFetch(`/api/products`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -83,7 +82,7 @@ export default function ProductsPage() {
     if (newFile) {
       const fd = new FormData();
       fd.append("file", newFile);
-      await fetch(`${API}/api/products/${created.id}/file`, { method: "POST", body: fd });
+      await apiFetch(`/api/products/${created.id}/file`, { method: "POST", body: fd });
       setNewFile(null);
     }
     setNewName("");
@@ -93,7 +92,7 @@ export default function ProductsPage() {
   }
 
   async function handleDelete(id: number) {
-    await fetch(`${API}/api/products/${id}`, { method: "DELETE" });
+    await apiFetch(`/api/products/${id}`, { method: "DELETE" });
     loadProducts();
   }
 
@@ -109,17 +108,17 @@ export default function ProductsPage() {
   async function uploadFile(productId: number, file: File) {
     const fd = new FormData();
     fd.append("file", file);
-    await fetch(`${API}/api/products/${productId}/file`, { method: "POST", body: fd });
+    await apiFetch(`/api/products/${productId}/file`, { method: "POST", body: fd });
     loadProducts();
   }
 
   async function deleteFile(productId: number) {
-    await fetch(`${API}/api/products/${productId}/file`, { method: "DELETE" });
+    await apiFetch(`/api/products/${productId}/file`, { method: "DELETE" });
     loadProducts();
   }
 
   async function saveEdit(id: number) {
-    await fetch(`${API}/api/products/${id}`, {
+    await apiFetch(`/api/products/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -405,7 +404,7 @@ export default function ProductsPage() {
               <h3 className="font-bold text-lg">{previewProduct.name} - {previewProduct.file}</h3>
               <div className="flex items-center gap-3">
                 <a
-                  href={`${API}/api/products/${previewProduct.id}/file`}
+                  href={apiUrl(`/api/products/${previewProduct.id}/file`)}
                   download
                   target="_blank"
                   rel="noopener noreferrer"
@@ -432,13 +431,13 @@ export default function ProductsPage() {
             <div className="flex-1 overflow-auto p-4 flex items-center justify-center min-h-[400px]">
               {previewProduct.file.match(/\.pdf$/i) ? (
                 <iframe
-                  src={`${API}/api/products/${previewProduct.id}/file`}
+                  src={apiUrl(`/api/products/${previewProduct.id}/file`)}
                   className="w-full h-[75vh] border-0"
                   title="PDF Preview"
                 />
               ) : (
                 <img
-                  src={`${API}/api/products/${previewProduct.id}/file`}
+                  src={apiUrl(`/api/products/${previewProduct.id}/file`)}
                   alt={previewProduct.name}
                   className="max-w-full max-h-[75vh] object-contain"
                 />

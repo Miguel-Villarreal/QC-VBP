@@ -43,6 +43,7 @@ export default function LoginPage() {
         can_mark_addressed: data.can_mark_addressed,
         can_edit_addressed: data.can_edit_addressed,
         can_delete_addressed: data.can_delete_addressed,
+        can_assign: data.can_assign,
       });
       setCompany(data.company_access as Company);
       router.push("/dashboard");

@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useI18n, useAuth } from "../../i18n";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+import { apiFetch } from "../../api";
 
 interface User {
   username: string;
@@ -48,17 +47,17 @@ export default function SettingsPage() {
   const [newSupplier, setNewSupplier] = useState("");
 
   const loadUsers = useCallback(async () => {
-    const res = await fetch(`${API}/api/users`);
+    const res = await apiFetch(`/api/users`);
     setUserList(await res.json());
   }, []);
 
   const loadActions = useCallback(async () => {
-    const res = await fetch(`${API}/api/suggested-actions`);
+    const res = await apiFetch(`/api/suggested-actions`);
     setActionsList(await res.json());
   }, []);
 
   const loadSuppliers = useCallback(async () => {
-    const res = await fetch(`${API}/api/suppliers`);
+    const res = await apiFetch(`/api/suppliers`);
     setSuppliersList(await res.json());
   }, []);
 
@@ -71,7 +70,7 @@ export default function SettingsPage() {
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!newUsername.trim() || !newPassword.trim()) return;
-    await fetch(`${API}/api/users`, {
+    await apiFetch(`/api/users`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -106,14 +105,14 @@ export default function SettingsPage() {
   }
 
   async function handleDelete(username: string) {
-    await fetch(`${API}/api/users/${username}`, { method: "DELETE" });
+    await apiFetch(`/api/users/${username}`, { method: "DELETE" });
     loadUsers();
   }
 
   async function handleAddAction(e: React.FormEvent) {
     e.preventDefault();
     if (!newAction.trim()) return;
-    await fetch(`${API}/api/suggested-actions`, {
+    await apiFetch(`/api/suggested-actions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: newAction.trim() }),
@@ -123,14 +122,14 @@ export default function SettingsPage() {
   }
 
   async function handleDeleteAction(index: number) {
-    await fetch(`${API}/api/suggested-actions/${index}`, { method: "DELETE" });
+    await apiFetch(`/api/suggested-actions/${index}`, { method: "DELETE" });
     loadActions();
   }
 
   async function handleAddSupplier(e: React.FormEvent) {
     e.preventDefault();
     if (!newSupplier.trim()) return;
-    await fetch(`${API}/api/suppliers`, {
+    await apiFetch(`/api/suppliers`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newSupplier.trim() }),
@@ -140,7 +139,7 @@ export default function SettingsPage() {
   }
 
   async function handleDeleteSupplier(index: number) {
-    await fetch(`${API}/api/suppliers/${index}`, { method: "DELETE" });
+    await apiFetch(`/api/suppliers/${index}`, { method: "DELETE" });
     loadSuppliers();
   }
 

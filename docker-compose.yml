@@ -1,0 +1,15 @@
+services:
+  qc-inspector:
+    build: .
+    ports:
+      - "8001:8001"
+    volumes:
+      - qc-data:/app/backend/data
+      - qc-uploads:/app/backend/uploads
+    environment:
+      - JWT_SECRET=change-this-in-production
+      - DB_PATH=/app/backend/data/qc.db
+
+volumes:
+  qc-data:
+  qc-uploads:

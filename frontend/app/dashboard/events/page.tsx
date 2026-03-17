@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useI18n, useCompany, useAuth } from "../../i18n";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+import { apiFetch, apiUrl } from "../../api";
 
 interface Product {
   id: number;
@@ -111,11 +110,11 @@ export default function EventsPage() {
 
   const loadData = useCallback(async () => {
     const [prodRes, evtRes, pendRes, actRes, usersRes] = await Promise.all([
-      fetch(`${API}/api/products?company=${company}`),
-      fetch(`${API}/api/events?company=${company}`),
-      fetch(`${API}/api/pending?company=${company}`),
-      fetch(`${API}/api/suggested-actions`),
-      fetch(`${API}/api/users`),
+      apiFetch(`/api/products?company=${company}`),
+      apiFetch(`/api/events?company=${company}`),
+      apiFetch(`/api/pending?company=${company}`),
+      apiFetch(`/api/suggested-actions`),
+      apiFetch(`/api/users`),
     ]);
     const prods = await prodRes.json();
     setProducts(prods);
@@ -142,8 +141,8 @@ export default function EventsPage() {
         return;
       }
       try {
-        const res = await fetch(
-          `${API}/api/aql/lookup?lot_size=${lot}&inspection_level=${encodeURIComponent(product.inspection_level)}&aql_level=${encodeURIComponent(product.aql_level)}`
+        const res = await apiFetch(
+          `/api/aql/lookup?lot_size=${lot}&inspection_level=${encodeURIComponent(product.inspection_level)}&aql_level=${encodeURIComponent(product.aql_level)}`
         );
         if (res.ok) {
           setAqlPreview(await res.json());
@@ -158,7 +157,7 @@ export default function EventsPage() {
   // --- Schedule ---
   async function handleSchedule(e: React.FormEvent) {
     e.preventDefault();
-    await fetch(`${API}/api/pending`, {
+    await apiFetch(`/api/pending`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -200,7 +199,7 @@ export default function EventsPage() {
 
   async function handleCompleteInspection(e: React.FormEvent) {
     e.preventDefault();
-    await fetch(`${API}/api/events`, {
+    await apiFetch(`/api/events`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -234,7 +233,7 @@ export default function EventsPage() {
   }
 
   async function saveEditPending(id: number) {
-    await fetch(`${API}/api/pending/${id}`, {
+    await apiFetch(`/api/pending/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -249,7 +248,7 @@ export default function EventsPage() {
   }
 
   async function deletePending(id: number) {
-    await fetch(`${API}/api/pending/${id}`, { method: "DELETE" });
+    await apiFetch(`/api/pending/${id}`, { method: "DELETE" });
     loadData();
   }
 
@@ -265,7 +264,7 @@ export default function EventsPage() {
   }
 
   async function saveEditEvent(id: number) {
-    await fetch(`${API}/api/events/${id}`, {
+    await apiFetch(`/api/events/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -282,7 +281,7 @@ export default function EventsPage() {
   }
 
   async function deleteEvent(id: number) {
-    await fetch(`${API}/api/events/${id}`, { method: "DELETE" });
+    await apiFetch(`/api/events/${id}`, { method: "DELETE" });
     loadData();
   }
 
@@ -292,7 +291,7 @@ export default function EventsPage() {
   const [editAddressedAction, setEditAddressedAction] = useState("");
 
   async function handleAddress(eventId: number, addressedDate: string) {
-    await fetch(`${API}/api/events/${eventId}/address`, {
+    await apiFetch(`/api/events/${eventId}/address`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ addressed: true, addressed_date: addressedDate, addressed_by: perms.username }),
@@ -301,7 +300,7 @@ export default function EventsPage() {
   }
 
   async function assignPending(pendingId: number, assignedTo: string) {
-    await fetch(`${API}/api/pending/${pendingId}/assign`, {
+    await apiFetch(`/api/pending/${pendingId}/assign`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ assigned_to: assignedTo }),
@@ -310,7 +309,7 @@ export default function EventsPage() {
   }
 
   async function assignEvent(eventId: number, assignedTo: string) {
-    await fetch(`${API}/api/events/${eventId}/assign`, {
+    await apiFetch(`/api/events/${eventId}/assign`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ assigned_to: assignedTo }),
@@ -319,7 +318,7 @@ export default function EventsPage() {
   }
 
   async function handleRelease(eventId: number, releaseDate: string) {
-    await fetch(`${API}/api/events/${eventId}/release`, {
+    await apiFetch(`/api/events/${eventId}/release`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ released: true, released_date: releaseDate, released_by: perms.username }),
@@ -328,7 +327,7 @@ export default function EventsPage() {
   }
 
   async function handleUnrelease(eventId: number) {
-    await fetch(`${API}/api/events/${eventId}/release`, {
+    await apiFetch(`/api/events/${eventId}/release`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ released: false }),
@@ -337,7 +336,7 @@ export default function EventsPage() {
   }
 
   async function handleUnaddress(eventId: number) {
-    await fetch(`${API}/api/events/${eventId}/address`, {
+    await apiFetch(`/api/events/${eventId}/address`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ addressed: false }),
@@ -353,7 +352,7 @@ export default function EventsPage() {
 
   async function saveEditAddressed(id: number) {
     await setSuggestedAction(id, editAddressedAction);
-    await fetch(`${API}/api/events/${id}/address`, {
+    await apiFetch(`/api/events/${id}/address`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ addressed: true, addressed_date: editAddressedDate }),
@@ -363,7 +362,7 @@ export default function EventsPage() {
   }
 
   async function setSuggestedAction(eventId: number, action: string) {
-    await fetch(`${API}/api/events/${eventId}/suggested-action`, {
+    await apiFetch(`/api/events/${eventId}/suggested-action`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ suggested_action: action }),
@@ -887,7 +886,7 @@ export default function EventsPage() {
           <h2 className="text-xl font-bold text-orange-600">{t("failedEvents")}</h2>
           {events.length > 0 && (
             <a
-              href={`${API}/api/events/export/pdf?lang=${lang}&company=${company}`}
+              href={apiUrl(`/api/events/export/pdf?lang=${lang}&company=${company}`)}
               className="bg-gray-700 text-white px-4 py-2 rounded text-sm font-medium hover:bg-gray-800"
             >
               {t("exportPdf")}
@@ -1052,7 +1051,7 @@ export default function EventsPage() {
                       <td className="px-3 py-2">{ev.created_by}</td>
                       <td className="px-3 py-2 text-right space-x-2">
                         <a
-                          href={`${API}/api/events/${ev.id}/export/pdf?lang=${lang}`}
+                          href={apiUrl(`/api/events/${ev.id}/export/pdf?lang=${lang}`)}
                           className="text-gray-600 hover:text-gray-800 text-sm"
                         >
                           PDF
@@ -1167,7 +1166,7 @@ export default function EventsPage() {
                         </button>
                       )}
                       <a
-                        href={`${API}/api/events/${ev.id}/export/pdf?lang=${lang}`}
+                        href={apiUrl(`/api/events/${ev.id}/export/pdf?lang=${lang}`)}
                         className="text-gray-600 hover:text-gray-800 text-sm"
                       >
                         PDF
@@ -1384,7 +1383,7 @@ export default function EventsPage() {
                           {t("release")}
                         </button>
                         <a
-                          href={`${API}/api/events/${ev.id}/export/pdf?lang=${lang}`}
+                          href={apiUrl(`/api/events/${ev.id}/export/pdf?lang=${lang}`)}
                           className="text-gray-600 hover:text-gray-800 text-sm"
                         >
                           PDF
@@ -1489,7 +1488,7 @@ export default function EventsPage() {
                     <td className="px-3 py-2">{ev.released_by}</td>
                     <td className="px-3 py-2 text-right space-x-2">
                       <a
-                        href={`${API}/api/events/${ev.id}/export/pdf?lang=${lang}`}
+                        href={apiUrl(`/api/events/${ev.id}/export/pdf?lang=${lang}`)}
                         className="text-gray-600 hover:text-gray-800 text-sm"
                       >
                         PDF
