@@ -104,6 +104,65 @@ export default function SettingsPage() {
     loadUsers();
   }
 
+  // Edit user state
+  const [editingUser, setEditingUser] = useState<string | null>(null);
+  const [editUsername, setEditUsername] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [editCompanyAccess, setEditCompanyAccess] = useState("All");
+  const [editCanManageProducts, setEditCanManageProducts] = useState(true);
+  const [editCanEditPending, setEditCanEditPending] = useState(true);
+  const [editCanDeletePending, setEditCanDeletePending] = useState(true);
+  const [editCanEditEvents, setEditCanEditEvents] = useState(true);
+  const [editCanDeleteEvents, setEditCanDeleteEvents] = useState(true);
+  const [editCanSetSuggestedAction, setEditCanSetSuggestedAction] = useState(true);
+  const [editCanMarkAddressed, setEditCanMarkAddressed] = useState(true);
+  const [editCanEditAddressed, setEditCanEditAddressed] = useState(true);
+  const [editCanDeleteAddressed, setEditCanDeleteAddressed] = useState(true);
+  const [editCanAssign, setEditCanAssign] = useState(true);
+
+  function startEdit(u: User) {
+    setEditingUser(u.username);
+    setEditUsername(u.username);
+    setEditPassword("");
+    setEditCompanyAccess(u.company_access);
+    setEditCanManageProducts(u.can_manage_products);
+    setEditCanEditPending(u.can_edit_pending);
+    setEditCanDeletePending(u.can_delete_pending);
+    setEditCanEditEvents(u.can_edit_events);
+    setEditCanDeleteEvents(u.can_delete_events);
+    setEditCanSetSuggestedAction(u.can_set_suggested_action);
+    setEditCanMarkAddressed(u.can_mark_addressed);
+    setEditCanEditAddressed(u.can_edit_addressed);
+    setEditCanDeleteAddressed(u.can_delete_addressed);
+    setEditCanAssign(u.can_assign);
+  }
+
+  async function handleSaveEdit() {
+    if (!editingUser) return;
+    const body: Record<string, unknown> = {
+      new_username: editUsername.trim() !== editingUser ? editUsername.trim() : undefined,
+      new_password: editPassword.trim() || undefined,
+      company_access: editCompanyAccess,
+      can_manage_products: editCanManageProducts,
+      can_edit_pending: editCanEditPending,
+      can_delete_pending: editCanDeletePending,
+      can_edit_events: editCanEditEvents,
+      can_delete_events: editCanDeleteEvents,
+      can_set_suggested_action: editCanSetSuggestedAction,
+      can_mark_addressed: editCanMarkAddressed,
+      can_edit_addressed: editCanEditAddressed,
+      can_delete_addressed: editCanDeleteAddressed,
+      can_assign: editCanAssign,
+    };
+    await apiFetch(`/api/users/${editingUser}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setEditingUser(null);
+    loadUsers();
+  }
+
   async function handleDelete(username: string) {
     await apiFetch(`/api/users/${username}`, { method: "DELETE" });
     loadUsers();
@@ -383,37 +442,83 @@ export default function SettingsPage() {
               </thead>
               <tbody>
                 {userList.map((u) => (
-                  <tr key={u.username} className="border-b">
-                    <td className="px-3 py-2">
-                      {u.username}
-                      {u.is_admin && (
-                        <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
-                          {t("admin")}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">{u.company_access}</td>
-                    <td className="px-3 py-2">{u.can_manage_products ? t("yes") : t("no")}</td>
-                    <td className="px-3 py-2">{u.can_edit_pending ? t("yes") : t("no")}</td>
-                    <td className="px-3 py-2">{u.can_delete_pending ? t("yes") : t("no")}</td>
-                    <td className="px-3 py-2">{u.can_edit_events ? t("yes") : t("no")}</td>
-                    <td className="px-3 py-2">{u.can_delete_events ? t("yes") : t("no")}</td>
-                    <td className="px-3 py-2">{u.can_set_suggested_action ? t("yes") : t("no")}</td>
-                    <td className="px-3 py-2">{u.can_mark_addressed ? t("yes") : t("no")}</td>
-                    <td className="px-3 py-2">{u.can_edit_addressed ? t("yes") : t("no")}</td>
-                    <td className="px-3 py-2">{u.can_delete_addressed ? t("yes") : t("no")}</td>
-                    <td className="px-3 py-2">{u.can_assign ? t("yes") : t("no")}</td>
-                    <td className="px-3 py-2 text-right">
-                      {!u.is_admin && (
-                        <button
-                          onClick={() => handleDelete(u.username)}
-                          className="text-red-600 hover:text-red-800 text-sm"
+                  editingUser === u.username ? (
+                    <tr key={u.username} className="border-b bg-blue-50">
+                      <td className="px-3 py-2">
+                        <input
+                          type="text"
+                          value={editUsername}
+                          onChange={(e) => setEditUsername(e.target.value)}
+                          className="border rounded px-2 py-1 w-full text-sm"
+                        />
+                        <input
+                          type="text"
+                          value={editPassword}
+                          onChange={(e) => setEditPassword(e.target.value)}
+                          placeholder={t("newPasswordPlaceholder")}
+                          className="border rounded px-2 py-1 w-full text-sm mt-1"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <select
+                          value={editCompanyAccess}
+                          onChange={(e) => setEditCompanyAccess(e.target.value)}
+                          className="border rounded px-2 py-1 text-sm"
                         >
-                          {t("delete")}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
+                          <option value="All">{t("all")}</option>
+                          <option value="VBC">VBC</option>
+                          <option value="VBP">VBP</option>
+                        </select>
+                      </td>
+                      <td className="px-3 py-2"><input type="checkbox" checked={editCanManageProducts} onChange={(e) => setEditCanManageProducts(e.target.checked)} /></td>
+                      <td className="px-3 py-2"><input type="checkbox" checked={editCanEditPending} onChange={(e) => setEditCanEditPending(e.target.checked)} /></td>
+                      <td className="px-3 py-2"><input type="checkbox" checked={editCanDeletePending} onChange={(e) => setEditCanDeletePending(e.target.checked)} /></td>
+                      <td className="px-3 py-2"><input type="checkbox" checked={editCanEditEvents} onChange={(e) => setEditCanEditEvents(e.target.checked)} /></td>
+                      <td className="px-3 py-2"><input type="checkbox" checked={editCanDeleteEvents} onChange={(e) => setEditCanDeleteEvents(e.target.checked)} /></td>
+                      <td className="px-3 py-2"><input type="checkbox" checked={editCanSetSuggestedAction} onChange={(e) => setEditCanSetSuggestedAction(e.target.checked)} /></td>
+                      <td className="px-3 py-2"><input type="checkbox" checked={editCanMarkAddressed} onChange={(e) => setEditCanMarkAddressed(e.target.checked)} /></td>
+                      <td className="px-3 py-2"><input type="checkbox" checked={editCanEditAddressed} onChange={(e) => setEditCanEditAddressed(e.target.checked)} /></td>
+                      <td className="px-3 py-2"><input type="checkbox" checked={editCanDeleteAddressed} onChange={(e) => setEditCanDeleteAddressed(e.target.checked)} /></td>
+                      <td className="px-3 py-2"><input type="checkbox" checked={editCanAssign} onChange={(e) => setEditCanAssign(e.target.checked)} /></td>
+                      <td className="px-3 py-2 text-right space-x-2">
+                        <button onClick={handleSaveEdit} className="text-green-600 hover:text-green-800 text-sm">{t("save")}</button>
+                        <button onClick={() => setEditingUser(null)} className="text-gray-600 hover:text-gray-800 text-sm">{t("cancel")}</button>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={u.username} className="border-b">
+                      <td className="px-3 py-2">
+                        {u.username}
+                        {u.is_admin && (
+                          <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
+                            {t("admin")}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">{u.company_access}</td>
+                      <td className="px-3 py-2">{u.can_manage_products ? t("yes") : t("no")}</td>
+                      <td className="px-3 py-2">{u.can_edit_pending ? t("yes") : t("no")}</td>
+                      <td className="px-3 py-2">{u.can_delete_pending ? t("yes") : t("no")}</td>
+                      <td className="px-3 py-2">{u.can_edit_events ? t("yes") : t("no")}</td>
+                      <td className="px-3 py-2">{u.can_delete_events ? t("yes") : t("no")}</td>
+                      <td className="px-3 py-2">{u.can_set_suggested_action ? t("yes") : t("no")}</td>
+                      <td className="px-3 py-2">{u.can_mark_addressed ? t("yes") : t("no")}</td>
+                      <td className="px-3 py-2">{u.can_edit_addressed ? t("yes") : t("no")}</td>
+                      <td className="px-3 py-2">{u.can_delete_addressed ? t("yes") : t("no")}</td>
+                      <td className="px-3 py-2">{u.can_assign ? t("yes") : t("no")}</td>
+                      <td className="px-3 py-2 text-right space-x-2">
+                        <button onClick={() => startEdit(u)} className="text-blue-600 hover:text-blue-800 text-sm">{t("edit")}</button>
+                        {!u.is_admin && (
+                          <button
+                            onClick={() => handleDelete(u.username)}
+                            className="text-red-600 hover:text-red-800 text-sm"
+                          >
+                            {t("delete")}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
                 ))}
               </tbody>
             </table>

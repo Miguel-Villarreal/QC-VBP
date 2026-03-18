@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n, useAuth, useCompany, Company } from "./i18n";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");

@@ -37,6 +37,9 @@ const translations = {
   save: { en: "Save", es: "Guardar" },
   cancel: { en: "Cancel", es: "Cancelar" },
   edit: { en: "Edit", es: "Editar" },
+  editUser: { en: "Edit User", es: "Editar Usuario" },
+  newPassword: { en: "New Password", es: "Nueva Contrasena" },
+  newPasswordPlaceholder: { en: "Leave blank to keep current", es: "Dejar vacio para mantener actual" },
   delete: { en: "Delete", es: "Eliminar" },
   remove: { en: "Remove", es: "Eliminar" },
 

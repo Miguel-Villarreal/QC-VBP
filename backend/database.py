@@ -240,6 +240,34 @@ def create_user(username: str, password: str, is_admin: bool = False, **perms) -
     return get_user(username)
 
 
+def update_user(username: str, new_username: str | None = None, new_password: str | None = None,
+                 **perms) -> dict | None:
+    user = get_user(username)
+    if not user:
+        return None
+    conn = get_conn()
+    updates = []
+    values = []
+    if new_username and new_username != username:
+        updates.append("username = ?")
+        values.append(new_username)
+    if new_password:
+        updates.append("password_hash = ?")
+        values.append(auth.hash_password(new_password))
+    for field in ("company_access", "can_manage_products", "can_edit_pending", "can_delete_pending",
+                  "can_edit_events", "can_delete_events", "can_set_suggested_action",
+                  "can_mark_addressed", "can_edit_addressed", "can_delete_addressed", "can_assign"):
+        if field in perms:
+            updates.append(f"{field} = ?")
+            values.append(int(perms[field]) if isinstance(perms[field], bool) else perms[field])
+    if not updates:
+        return user
+    values.append(username)
+    conn.execute(f"UPDATE users SET {', '.join(updates)} WHERE username = ?", values)
+    conn.commit()
+    return get_user(new_username if new_username and new_username != username else username)
+
+
 def delete_user(username: str) -> dict | None:
     user = get_user(username)
     if user:

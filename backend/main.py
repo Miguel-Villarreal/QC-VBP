@@ -61,6 +61,21 @@ class UserCreate(BaseModel):
     can_delete_addressed: bool = True
     can_assign: bool = True
 
+class UserUpdate(BaseModel):
+    new_username: str | None = None
+    new_password: str | None = None
+    company_access: str | None = None
+    can_manage_products: bool | None = None
+    can_edit_pending: bool | None = None
+    can_delete_pending: bool | None = None
+    can_edit_events: bool | None = None
+    can_delete_events: bool | None = None
+    can_set_suggested_action: bool | None = None
+    can_mark_addressed: bool | None = None
+    can_edit_addressed: bool | None = None
+    can_delete_addressed: bool | None = None
+    can_assign: bool | None = None
+
 class ProductCreate(BaseModel):
     name: str
     inspection_level: str
@@ -154,6 +169,17 @@ def create_user(user: UserCreate, _user: str = Depends(auth.require_auth)):
         can_assign=user.can_assign,
     )
     return {k: v for k, v in created.items() if k != "password_hash"}
+
+@app.patch("/api/users/{username}")
+def update_user(username: str, body: UserUpdate, _user: str = Depends(auth.require_auth)):
+    u = database.get_user(username)
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    if body.new_username and body.new_username != username and database.get_user(body.new_username):
+        raise HTTPException(status_code=400, detail="Username already exists")
+    perms = {k: v for k, v in body.model_dump().items() if v is not None and k not in ("new_username", "new_password")}
+    updated = database.update_user(username, new_username=body.new_username, new_password=body.new_password, **perms)
+    return {k: v for k, v in updated.items() if k != "password_hash"}
 
 @app.delete("/api/users/{username}")
 def delete_user(username: str, _user: str = Depends(auth.require_auth)):
