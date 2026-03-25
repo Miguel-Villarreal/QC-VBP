@@ -106,6 +106,11 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE
             );
+
+            CREATE INDEX IF NOT EXISTS idx_events_pass_fail ON events(pass_fail);
+            CREATE INDEX IF NOT EXISTS idx_events_addressed ON events(addressed);
+            CREATE INDEX IF NOT EXISTS idx_events_released ON events(released);
+            CREATE INDEX IF NOT EXISTS idx_products_supplier ON products(supplier);
         """)
 
         # Seed admin user if no users exist
