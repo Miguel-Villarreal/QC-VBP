@@ -46,6 +46,10 @@ INSPECTION_LEVELS = ["I", "II", "III", "S-1", "S-2", "S-3", "S-4"]
 
 COMPANIES = ["VBC", "VBP"]
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
 class UserCreate(BaseModel):
     username: str
     password: str
@@ -117,9 +121,9 @@ class EventUpdate(BaseModel):
 # --- Auth ---
 
 @app.post("/api/auth/login")
-def login(data: dict):
-    username = data.get("username", "")
-    password = data.get("password", "")
+def login(data: LoginRequest):
+    username = data.username
+    password = data.password
     u = database.get_user(username)
     if u and auth.verify_password(password, u["password_hash"]):
         return {
@@ -188,7 +192,8 @@ def delete_user(username: str, _user: str = Depends(auth.require_admin)):
         raise HTTPException(status_code=404, detail="User not found")
     if u["is_admin"]:
         raise HTTPException(status_code=400, detail="Cannot delete admin user")
-    return database.delete_user(username)
+    deleted = database.delete_user(username)
+    return {k: v for k, v in deleted.items() if k != "password_hash"}
 
 
 # --- Suggested Actions ---
