@@ -1,10 +1,14 @@
 import os
+import sys
 from datetime import datetime, timedelta, timezone
 from fastapi import Request, HTTPException
 import bcrypt as _bcrypt
 import jwt
 
-SECRET_KEY = os.environ.get("JWT_SECRET", "qc-inspector-dev-secret-key-change-in-production")
+_DEFAULT_SECRET = "qc-inspector-dev-secret-key-change-in-production"
+SECRET_KEY = os.environ.get("JWT_SECRET", _DEFAULT_SECRET)
+if SECRET_KEY == _DEFAULT_SECRET:
+    print("WARNING: JWT_SECRET is using default value. Set JWT_SECRET environment variable for production.", file=sys.stderr)
 ALGORITHM = "HS256"
 TOKEN_EXPIRY_HOURS = 24
 

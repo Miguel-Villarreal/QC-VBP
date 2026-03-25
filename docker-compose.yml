@@ -7,7 +7,7 @@ services:
       - qc-data:/app/backend/data
       - qc-uploads:/app/backend/uploads
     environment:
-      - JWT_SECRET=change-this-in-production
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env file or environment}
       - DB_PATH=/app/backend/data/qc.db
 
 volumes:
