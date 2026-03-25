@@ -334,11 +334,16 @@ async def upload_product_file(product_id: int, file: UploadFile = File(...),
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"File type not allowed. Use: {', '.join(ALLOWED_EXTENSIONS)}")
+    # Check file size (10 MB limit)
+    MAX_FILE_SIZE = 10 * 1024 * 1024
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Maximum 10 MB.")
     for f in UPLOADS_DIR.glob(f"product_{product_id}.*"):
         f.unlink()
     dest = UPLOADS_DIR / f"product_{product_id}{ext}"
     with open(dest, "wb") as buf:
-        shutil.copyfileobj(file.file, buf)
+        buf.write(contents)
     filename = f"product_{product_id}{ext}"
     database.set_product_file(product_id, filename)
     return {"filename": filename}
