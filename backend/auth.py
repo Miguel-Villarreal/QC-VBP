@@ -48,3 +48,12 @@ def require_auth(request: Request) -> str:
     if not username:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     return username
+
+
+def require_admin(request: Request) -> str:
+    username = require_auth(request)
+    import database  # lazy import to avoid circular dependency
+    user = database.get_user(username)
+    if not user or not user["is_admin"]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return username

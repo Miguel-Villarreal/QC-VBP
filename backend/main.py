@@ -144,14 +144,14 @@ def login(data: dict):
 # --- Protected routes (require JWT) ---
 
 @app.get("/api/users")
-def list_users(_user: str = Depends(auth.require_auth)):
+def list_users(_user: str = Depends(auth.require_admin)):
     return [
         {k: v for k, v in u.items() if k != "password_hash"}
         for u in database.list_users()
     ]
 
 @app.post("/api/users")
-def create_user(user: UserCreate, _user: str = Depends(auth.require_auth)):
+def create_user(user: UserCreate, _user: str = Depends(auth.require_admin)):
     if database.get_user(user.username):
         raise HTTPException(status_code=400, detail="Username already exists")
     created = database.create_user(
@@ -171,7 +171,7 @@ def create_user(user: UserCreate, _user: str = Depends(auth.require_auth)):
     return {k: v for k, v in created.items() if k != "password_hash"}
 
 @app.patch("/api/users/{username}")
-def update_user(username: str, body: UserUpdate, _user: str = Depends(auth.require_auth)):
+def update_user(username: str, body: UserUpdate, _user: str = Depends(auth.require_admin)):
     u = database.get_user(username)
     if not u:
         raise HTTPException(status_code=404, detail="User not found")
@@ -182,7 +182,7 @@ def update_user(username: str, body: UserUpdate, _user: str = Depends(auth.requi
     return {k: v for k, v in updated.items() if k != "password_hash"}
 
 @app.delete("/api/users/{username}")
-def delete_user(username: str, _user: str = Depends(auth.require_auth)):
+def delete_user(username: str, _user: str = Depends(auth.require_admin)):
     u = database.get_user(username)
     if not u:
         raise HTTPException(status_code=404, detail="User not found")
@@ -198,7 +198,7 @@ def list_suggested_actions(_user: str = Depends(auth.require_auth)):
     return database.list_suggested_actions()
 
 @app.post("/api/suggested-actions")
-def add_suggested_action(data: dict, _user: str = Depends(auth.require_auth)):
+def add_suggested_action(data: dict, _user: str = Depends(auth.require_admin)):
     action = data.get("action", "").strip()
     if not action:
         raise HTTPException(status_code=400, detail="Action text is required")
@@ -211,7 +211,7 @@ def add_suggested_action(data: dict, _user: str = Depends(auth.require_auth)):
     return result
 
 @app.delete("/api/suggested-actions/{index}")
-def delete_suggested_action(index: int, _user: str = Depends(auth.require_auth)):
+def delete_suggested_action(index: int, _user: str = Depends(auth.require_admin)):
     removed = database.delete_suggested_action_by_index(index)
     if removed is None:
         raise HTTPException(status_code=404, detail="Action not found")
@@ -227,7 +227,7 @@ def list_suppliers(_user: str = Depends(auth.require_auth)):
     return database.list_suppliers()
 
 @app.post("/api/suppliers")
-def add_supplier(data: dict, _user: str = Depends(auth.require_auth)):
+def add_supplier(data: dict, _user: str = Depends(auth.require_admin)):
     name = data.get("name", "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Supplier name is required")
@@ -240,7 +240,7 @@ def add_supplier(data: dict, _user: str = Depends(auth.require_auth)):
     return result
 
 @app.delete("/api/suppliers/{index}")
-def delete_supplier(index: int, _user: str = Depends(auth.require_auth)):
+def delete_supplier(index: int, _user: str = Depends(auth.require_admin)):
     removed = database.delete_supplier_by_index(index)
     if removed is None:
         raise HTTPException(status_code=404, detail="Supplier not found")
