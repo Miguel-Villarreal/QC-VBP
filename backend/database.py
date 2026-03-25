@@ -1,12 +1,14 @@
 import json
 import os
 import sqlite3
+import threading
 from pathlib import Path
 import auth
 
 DB_PATH = os.environ.get("DB_PATH", str(Path(__file__).parent / "data" / "qc.db"))
 
 _conn: sqlite3.Connection | None = None
+_lock = threading.Lock()
 
 
 def get_conn() -> sqlite3.Connection:
@@ -22,102 +24,102 @@ def get_conn() -> sqlite3.Connection:
 
 def init_db():
     conn = get_conn()
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            username TEXT PRIMARY KEY,
-            password_hash TEXT NOT NULL,
-            is_admin INTEGER NOT NULL DEFAULT 0,
-            company_access TEXT NOT NULL DEFAULT 'All',
-            can_manage_products INTEGER DEFAULT 1,
-            can_edit_pending INTEGER DEFAULT 1,
-            can_delete_pending INTEGER DEFAULT 1,
-            can_edit_events INTEGER DEFAULT 1,
-            can_delete_events INTEGER DEFAULT 1,
-            can_set_suggested_action INTEGER DEFAULT 1,
-            can_mark_addressed INTEGER DEFAULT 1,
-            can_edit_addressed INTEGER DEFAULT 1,
-            can_delete_addressed INTEGER DEFAULT 1,
-            can_assign INTEGER DEFAULT 1
-        );
+    with _lock:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS users (
+                username TEXT PRIMARY KEY,
+                password_hash TEXT NOT NULL,
+                is_admin INTEGER NOT NULL DEFAULT 0,
+                company_access TEXT NOT NULL DEFAULT 'All',
+                can_manage_products INTEGER DEFAULT 1,
+                can_edit_pending INTEGER DEFAULT 1,
+                can_delete_pending INTEGER DEFAULT 1,
+                can_edit_events INTEGER DEFAULT 1,
+                can_delete_events INTEGER DEFAULT 1,
+                can_set_suggested_action INTEGER DEFAULT 1,
+                can_mark_addressed INTEGER DEFAULT 1,
+                can_edit_addressed INTEGER DEFAULT 1,
+                can_delete_addressed INTEGER DEFAULT 1,
+                can_assign INTEGER DEFAULT 1
+            );
 
-        CREATE TABLE IF NOT EXISTS products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            inspection_level TEXT NOT NULL,
-            aql_level TEXT NOT NULL,
-            test_details TEXT DEFAULT '',
-            supplier TEXT DEFAULT '',
-            file TEXT DEFAULT '',
-            companies TEXT DEFAULT '[]',
-            created_by TEXT DEFAULT 'user',
-            created_at TEXT NOT NULL
-        );
+            CREATE TABLE IF NOT EXISTS products (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                inspection_level TEXT NOT NULL,
+                aql_level TEXT NOT NULL,
+                test_details TEXT DEFAULT '',
+                supplier TEXT DEFAULT '',
+                file TEXT DEFAULT '',
+                companies TEXT DEFAULT '[]',
+                created_by TEXT DEFAULT 'user',
+                created_at TEXT NOT NULL
+            );
 
-        CREATE TABLE IF NOT EXISTS events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            product_id INTEGER NOT NULL,
-            product_name TEXT NOT NULL,
-            direction TEXT NOT NULL,
-            lot_size INTEGER NOT NULL,
-            quantity_inspected INTEGER NOT NULL,
-            quantity_non_conforming INTEGER NOT NULL,
-            pass_fail TEXT,
-            sample_size INTEGER,
-            accept_number INTEGER,
-            reject_number INTEGER,
-            code_letter TEXT,
-            date_inspected TEXT NOT NULL,
-            companies TEXT DEFAULT '[]',
-            suggested_action TEXT DEFAULT '',
-            addressed INTEGER DEFAULT 0,
-            addressed_date TEXT DEFAULT '',
-            addressed_by TEXT DEFAULT '',
-            assigned_to TEXT DEFAULT '',
-            released INTEGER DEFAULT 0,
-            released_date TEXT DEFAULT '',
-            released_by TEXT DEFAULT '',
-            created_by TEXT DEFAULT 'user',
-            created_at TEXT NOT NULL
-        );
+            CREATE TABLE IF NOT EXISTS events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id INTEGER NOT NULL,
+                product_name TEXT NOT NULL,
+                direction TEXT NOT NULL,
+                lot_size INTEGER NOT NULL,
+                quantity_inspected INTEGER NOT NULL,
+                quantity_non_conforming INTEGER NOT NULL,
+                pass_fail TEXT,
+                sample_size INTEGER,
+                accept_number INTEGER,
+                reject_number INTEGER,
+                code_letter TEXT,
+                date_inspected TEXT NOT NULL,
+                companies TEXT DEFAULT '[]',
+                suggested_action TEXT DEFAULT '',
+                addressed INTEGER DEFAULT 0,
+                addressed_date TEXT DEFAULT '',
+                addressed_by TEXT DEFAULT '',
+                assigned_to TEXT DEFAULT '',
+                released INTEGER DEFAULT 0,
+                released_date TEXT DEFAULT '',
+                released_by TEXT DEFAULT '',
+                created_by TEXT DEFAULT 'user',
+                created_at TEXT NOT NULL
+            );
 
-        CREATE TABLE IF NOT EXISTS pending_inspections (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            product_id INTEGER NOT NULL,
-            product_name TEXT NOT NULL,
-            direction TEXT NOT NULL,
-            lot_size INTEGER NOT NULL,
-            suggested_sample_size INTEGER,
-            estimated_date TEXT NOT NULL,
-            companies TEXT DEFAULT '[]',
-            created_by TEXT DEFAULT 'user',
-            assigned_to TEXT DEFAULT '',
-            created_at TEXT NOT NULL
-        );
+            CREATE TABLE IF NOT EXISTS pending_inspections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id INTEGER NOT NULL,
+                product_name TEXT NOT NULL,
+                direction TEXT NOT NULL,
+                lot_size INTEGER NOT NULL,
+                suggested_sample_size INTEGER,
+                estimated_date TEXT NOT NULL,
+                companies TEXT DEFAULT '[]',
+                created_by TEXT DEFAULT 'user',
+                assigned_to TEXT DEFAULT '',
+                created_at TEXT NOT NULL
+            );
 
-        CREATE TABLE IF NOT EXISTS suggested_actions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            action TEXT NOT NULL UNIQUE
-        );
+            CREATE TABLE IF NOT EXISTS suggested_actions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                action TEXT NOT NULL UNIQUE
+            );
 
-        CREATE TABLE IF NOT EXISTS suppliers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE
-        );
-    """)
-    conn.commit()
+            CREATE TABLE IF NOT EXISTS suppliers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE
+            );
+        """)
 
-    # Seed admin user if no users exist
-    row = conn.execute("SELECT COUNT(*) FROM users").fetchone()
-    if row[0] == 0:
-        conn.execute(
-            """INSERT INTO users (username, password_hash, is_admin, company_access,
-               can_manage_products, can_edit_pending, can_delete_pending,
-               can_edit_events, can_delete_events, can_set_suggested_action,
-               can_mark_addressed, can_edit_addressed, can_delete_addressed, can_assign)
-               VALUES (?, ?, 1, 'All', 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)""",
-            ("user", auth.hash_password("password")),
-        )
-        conn.commit()
+        # Seed admin user if no users exist
+        row = conn.execute("SELECT COUNT(*) FROM users").fetchone()
+        if row[0] == 0:
+            with conn:
+                conn.execute(
+                    """INSERT INTO users (username, password_hash, is_admin, company_access,
+                       can_manage_products, can_edit_pending, can_delete_pending,
+                       can_edit_events, can_delete_events, can_set_suggested_action,
+                       can_mark_addressed, can_edit_addressed, can_delete_addressed, can_assign)
+                       VALUES (?, ?, 1, 'All', 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)""",
+                    ("user", auth.hash_password("password")),
+                )
 
 
 # --- Helpers ---
@@ -215,28 +217,28 @@ def list_users() -> list[dict]:
 
 def create_user(username: str, password: str, is_admin: bool = False, **perms) -> dict:
     conn = get_conn()
-    conn.execute(
-        """INSERT INTO users (username, password_hash, is_admin, company_access,
-           can_manage_products, can_edit_pending, can_delete_pending,
-           can_edit_events, can_delete_events, can_set_suggested_action,
-           can_mark_addressed, can_edit_addressed, can_delete_addressed, can_assign)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            username, auth.hash_password(password), int(is_admin),
-            perms.get("company_access", "All"),
-            int(perms.get("can_manage_products", True)),
-            int(perms.get("can_edit_pending", True)),
-            int(perms.get("can_delete_pending", True)),
-            int(perms.get("can_edit_events", True)),
-            int(perms.get("can_delete_events", True)),
-            int(perms.get("can_set_suggested_action", True)),
-            int(perms.get("can_mark_addressed", True)),
-            int(perms.get("can_edit_addressed", True)),
-            int(perms.get("can_delete_addressed", True)),
-            int(perms.get("can_assign", True)),
-        ),
-    )
-    conn.commit()
+    with _lock, conn:
+        conn.execute(
+            """INSERT INTO users (username, password_hash, is_admin, company_access,
+               can_manage_products, can_edit_pending, can_delete_pending,
+               can_edit_events, can_delete_events, can_set_suggested_action,
+               can_mark_addressed, can_edit_addressed, can_delete_addressed, can_assign)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                username, auth.hash_password(password), int(is_admin),
+                perms.get("company_access", "All"),
+                int(perms.get("can_manage_products", True)),
+                int(perms.get("can_edit_pending", True)),
+                int(perms.get("can_delete_pending", True)),
+                int(perms.get("can_edit_events", True)),
+                int(perms.get("can_delete_events", True)),
+                int(perms.get("can_set_suggested_action", True)),
+                int(perms.get("can_mark_addressed", True)),
+                int(perms.get("can_edit_addressed", True)),
+                int(perms.get("can_delete_addressed", True)),
+                int(perms.get("can_assign", True)),
+            ),
+        )
     return get_user(username)
 
 
@@ -263,16 +265,18 @@ def update_user(username: str, new_username: str | None = None, new_password: st
     if not updates:
         return user
     values.append(username)
-    conn.execute(f"UPDATE users SET {', '.join(updates)} WHERE username = ?", values)
-    conn.commit()
+    with _lock, conn:
+        conn.execute(f"UPDATE users SET {', '.join(updates)} WHERE username = ?", values)
     return get_user(new_username if new_username and new_username != username else username)
 
 
 def delete_user(username: str) -> dict | None:
     user = get_user(username)
-    if user:
-        get_conn().execute("DELETE FROM users WHERE username = ?", (username,))
-        get_conn().commit()
+    if not user:
+        return None
+    conn = get_conn()
+    with _lock, conn:
+        conn.execute("DELETE FROM users WHERE username = ?", (username,))
     return user
 
 
@@ -295,42 +299,44 @@ def create_product(name: str, inspection_level: str, aql_level: str,
                    test_details: str, supplier: str, companies: list[str],
                    created_by: str, created_at: str) -> dict:
     conn = get_conn()
-    cur = conn.execute(
-        """INSERT INTO products (name, inspection_level, aql_level, test_details,
-           supplier, file, companies, created_by, created_at)
-           VALUES (?, ?, ?, ?, ?, '', ?, ?, ?)""",
-        (name, inspection_level, aql_level, test_details, supplier,
-         json.dumps(companies), created_by, created_at),
-    )
-    conn.commit()
+    with _lock, conn:
+        cur = conn.execute(
+            """INSERT INTO products (name, inspection_level, aql_level, test_details,
+               supplier, file, companies, created_by, created_at)
+               VALUES (?, ?, ?, ?, ?, '', ?, ?, ?)""",
+            (name, inspection_level, aql_level, test_details, supplier,
+             json.dumps(companies), created_by, created_at),
+        )
     return get_product(cur.lastrowid)
 
 
 def update_product(product_id: int, name: str, inspection_level: str, aql_level: str,
                    test_details: str, supplier: str, companies: list[str]) -> dict:
     conn = get_conn()
-    conn.execute(
-        """UPDATE products SET name=?, inspection_level=?, aql_level=?,
-           test_details=?, supplier=?, companies=? WHERE id=?""",
-        (name, inspection_level, aql_level, test_details, supplier,
-         json.dumps(companies), product_id),
-    )
-    conn.commit()
+    with _lock, conn:
+        conn.execute(
+            """UPDATE products SET name=?, inspection_level=?, aql_level=?,
+               test_details=?, supplier=?, companies=? WHERE id=?""",
+            (name, inspection_level, aql_level, test_details, supplier,
+             json.dumps(companies), product_id),
+        )
     return get_product(product_id)
 
 
 def delete_product(product_id: int) -> dict | None:
     product = get_product(product_id)
-    if product:
-        get_conn().execute("DELETE FROM products WHERE id = ?", (product_id,))
-        get_conn().commit()
+    if not product:
+        return None
+    conn = get_conn()
+    with _lock, conn:
+        conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
     return product
 
 
 def set_product_file(product_id: int, filename: str):
     conn = get_conn()
-    conn.execute("UPDATE products SET file=? WHERE id=?", (filename, product_id))
-    conn.commit()
+    with _lock, conn:
+        conn.execute("UPDATE products SET file=? WHERE id=?", (filename, product_id))
 
 
 def get_all_products() -> dict:
@@ -341,8 +347,8 @@ def get_all_products() -> dict:
 
 def cascade_supplier_delete(supplier_name: str):
     conn = get_conn()
-    conn.execute("UPDATE products SET supplier='pending' WHERE supplier=?", (supplier_name,))
-    conn.commit()
+    with _lock, conn:
+        conn.execute("UPDATE products SET supplier='pending' WHERE supplier=?", (supplier_name,))
 
 
 # --- Events ---
@@ -367,19 +373,19 @@ def create_event(product_id: int, product_name: str, direction: str, lot_size: i
                  code_letter: str | None, date_inspected: str,
                  companies: list[str], created_by: str, created_at: str) -> dict:
     conn = get_conn()
-    cur = conn.execute(
-        """INSERT INTO events (product_id, product_name, direction, lot_size,
-           quantity_inspected, quantity_non_conforming, pass_fail, sample_size,
-           accept_number, reject_number, code_letter, date_inspected,
-           companies, suggested_action, addressed, addressed_date, addressed_by,
-           assigned_to, released, released_date, released_by, created_by, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 0, '', '', '', 0, '', '', ?, ?)""",
-        (product_id, product_name, direction, lot_size,
-         quantity_inspected, quantity_non_conforming, pass_fail, sample_size,
-         accept_number, reject_number, code_letter, date_inspected,
-         json.dumps(companies), created_by, created_at),
-    )
-    conn.commit()
+    with _lock, conn:
+        cur = conn.execute(
+            """INSERT INTO events (product_id, product_name, direction, lot_size,
+               quantity_inspected, quantity_non_conforming, pass_fail, sample_size,
+               accept_number, reject_number, code_letter, date_inspected,
+               companies, suggested_action, addressed, addressed_date, addressed_by,
+               assigned_to, released, released_date, released_by, created_by, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 0, '', '', '', 0, '', '', ?, ?)""",
+            (product_id, product_name, direction, lot_size,
+             quantity_inspected, quantity_non_conforming, pass_fail, sample_size,
+             accept_number, reject_number, code_letter, date_inspected,
+             json.dumps(companies), created_by, created_at),
+        )
     return get_event(cur.lastrowid)
 
 
@@ -389,60 +395,62 @@ def update_event(event_id: int, product_id: int, product_name: str, direction: s
                  accept_number: int | None, reject_number: int | None,
                  code_letter: str | None, date_inspected: str) -> dict:
     conn = get_conn()
-    conn.execute(
-        """UPDATE events SET product_id=?, product_name=?, direction=?, lot_size=?,
-           quantity_inspected=?, quantity_non_conforming=?, pass_fail=?, sample_size=?,
-           accept_number=?, reject_number=?, code_letter=?, date_inspected=?
-           WHERE id=?""",
-        (product_id, product_name, direction, lot_size,
-         quantity_inspected, quantity_non_conforming, pass_fail, sample_size,
-         accept_number, reject_number, code_letter, date_inspected, event_id),
-    )
-    conn.commit()
+    with _lock, conn:
+        conn.execute(
+            """UPDATE events SET product_id=?, product_name=?, direction=?, lot_size=?,
+               quantity_inspected=?, quantity_non_conforming=?, pass_fail=?, sample_size=?,
+               accept_number=?, reject_number=?, code_letter=?, date_inspected=?
+               WHERE id=?""",
+            (product_id, product_name, direction, lot_size,
+             quantity_inspected, quantity_non_conforming, pass_fail, sample_size,
+             accept_number, reject_number, code_letter, date_inspected, event_id),
+        )
     return get_event(event_id)
 
 
 def delete_event(event_id: int) -> dict | None:
     event = get_event(event_id)
-    if event:
-        get_conn().execute("DELETE FROM events WHERE id = ?", (event_id,))
-        get_conn().commit()
+    if not event:
+        return None
+    conn = get_conn()
+    with _lock, conn:
+        conn.execute("DELETE FROM events WHERE id = ?", (event_id,))
     return event
 
 
 def set_suggested_action(event_id: int, action: str) -> dict:
     conn = get_conn()
-    conn.execute("UPDATE events SET suggested_action=? WHERE id=?", (action, event_id))
-    conn.commit()
+    with _lock, conn:
+        conn.execute("UPDATE events SET suggested_action=? WHERE id=?", (action, event_id))
     return get_event(event_id)
 
 
 def set_addressed(event_id: int, addressed: bool, addressed_date: str = "",
                   addressed_by: str = "") -> dict:
     conn = get_conn()
-    conn.execute(
-        "UPDATE events SET addressed=?, addressed_date=?, addressed_by=? WHERE id=?",
-        (int(addressed), addressed_date, addressed_by, event_id),
-    )
-    conn.commit()
+    with _lock, conn:
+        conn.execute(
+            "UPDATE events SET addressed=?, addressed_date=?, addressed_by=? WHERE id=?",
+            (int(addressed), addressed_date, addressed_by, event_id),
+        )
     return get_event(event_id)
 
 
 def set_event_assigned(event_id: int, assigned_to: str) -> dict:
     conn = get_conn()
-    conn.execute("UPDATE events SET assigned_to=? WHERE id=?", (assigned_to, event_id))
-    conn.commit()
+    with _lock, conn:
+        conn.execute("UPDATE events SET assigned_to=? WHERE id=?", (assigned_to, event_id))
     return get_event(event_id)
 
 
 def set_released(event_id: int, released: bool, released_date: str = "",
                  released_by: str = "") -> dict:
     conn = get_conn()
-    conn.execute(
-        "UPDATE events SET released=?, released_date=?, released_by=? WHERE id=?",
-        (int(released), released_date, released_by, event_id),
-    )
-    conn.commit()
+    with _lock, conn:
+        conn.execute(
+            "UPDATE events SET released=?, released_date=?, released_by=? WHERE id=?",
+            (int(released), released_date, released_by, event_id),
+        )
     return get_event(event_id)
 
 
@@ -472,14 +480,14 @@ def create_pending(product_id: int, product_name: str, direction: str, lot_size:
                    companies: list[str], created_by: str, assigned_to: str,
                    created_at: str) -> dict:
     conn = get_conn()
-    cur = conn.execute(
-        """INSERT INTO pending_inspections (product_id, product_name, direction, lot_size,
-           suggested_sample_size, estimated_date, companies, created_by, assigned_to, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (product_id, product_name, direction, lot_size, suggested_sample_size,
-         estimated_date, json.dumps(companies), created_by, assigned_to, created_at),
-    )
-    conn.commit()
+    with _lock, conn:
+        cur = conn.execute(
+            """INSERT INTO pending_inspections (product_id, product_name, direction, lot_size,
+               suggested_sample_size, estimated_date, companies, created_by, assigned_to, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (product_id, product_name, direction, lot_size, suggested_sample_size,
+             estimated_date, json.dumps(companies), created_by, assigned_to, created_at),
+        )
     return get_pending(cur.lastrowid)
 
 
@@ -487,29 +495,31 @@ def update_pending(pending_id: int, product_id: int, product_name: str, directio
                    lot_size: int, suggested_sample_size: int, estimated_date: str,
                    companies: list[str], assigned_to: str) -> dict:
     conn = get_conn()
-    conn.execute(
-        """UPDATE pending_inspections SET product_id=?, product_name=?, direction=?,
-           lot_size=?, suggested_sample_size=?, estimated_date=?, companies=?, assigned_to=?
-           WHERE id=?""",
-        (product_id, product_name, direction, lot_size, suggested_sample_size,
-         estimated_date, json.dumps(companies), assigned_to, pending_id),
-    )
-    conn.commit()
+    with _lock, conn:
+        conn.execute(
+            """UPDATE pending_inspections SET product_id=?, product_name=?, direction=?,
+               lot_size=?, suggested_sample_size=?, estimated_date=?, companies=?, assigned_to=?
+               WHERE id=?""",
+            (product_id, product_name, direction, lot_size, suggested_sample_size,
+             estimated_date, json.dumps(companies), assigned_to, pending_id),
+        )
     return get_pending(pending_id)
 
 
 def delete_pending(pending_id: int) -> dict | None:
     pending = get_pending(pending_id)
-    if pending:
-        get_conn().execute("DELETE FROM pending_inspections WHERE id = ?", (pending_id,))
-        get_conn().commit()
+    if not pending:
+        return None
+    conn = get_conn()
+    with _lock, conn:
+        conn.execute("DELETE FROM pending_inspections WHERE id = ?", (pending_id,))
     return pending
 
 
 def set_pending_assigned(pending_id: int, assigned_to: str) -> dict:
     conn = get_conn()
-    conn.execute("UPDATE pending_inspections SET assigned_to=? WHERE id=?", (assigned_to, pending_id))
-    conn.commit()
+    with _lock, conn:
+        conn.execute("UPDATE pending_inspections SET assigned_to=? WHERE id=?", (assigned_to, pending_id))
     return get_pending(pending_id)
 
 
@@ -528,18 +538,19 @@ def list_suggested_actions() -> list[str]:
 
 def add_suggested_action(action: str):
     conn = get_conn()
-    conn.execute("INSERT INTO suggested_actions (action) VALUES (?)", (action,))
-    conn.commit()
+    with _lock, conn:
+        conn.execute("INSERT INTO suggested_actions (action) VALUES (?)", (action,))
 
 
 def delete_suggested_action_by_index(index: int) -> str | None:
     conn = get_conn()
-    rows = conn.execute("SELECT id, action FROM suggested_actions ORDER BY id").fetchall()
-    if index < 0 or index >= len(rows):
-        return None
-    removed = rows[index]["action"]
-    conn.execute("DELETE FROM suggested_actions WHERE id = ?", (rows[index]["id"],))
-    conn.commit()
+    with _lock:
+        rows = conn.execute("SELECT id, action FROM suggested_actions ORDER BY id").fetchall()
+        if index < 0 or index >= len(rows):
+            return None
+        removed = rows[index]["action"]
+        with conn:
+            conn.execute("DELETE FROM suggested_actions WHERE id = ?", (rows[index]["id"],))
     return removed
 
 
@@ -556,18 +567,19 @@ def list_suppliers() -> list[str]:
 
 def add_supplier(name: str):
     conn = get_conn()
-    conn.execute("INSERT INTO suppliers (name) VALUES (?)", (name,))
-    conn.commit()
+    with _lock, conn:
+        conn.execute("INSERT INTO suppliers (name) VALUES (?)", (name,))
 
 
 def delete_supplier_by_index(index: int) -> str | None:
     conn = get_conn()
-    rows = conn.execute("SELECT id, name FROM suppliers ORDER BY id").fetchall()
-    if index < 0 or index >= len(rows):
-        return None
-    removed = rows[index]["name"]
-    conn.execute("DELETE FROM suppliers WHERE id = ?", (rows[index]["id"],))
-    conn.commit()
+    with _lock:
+        rows = conn.execute("SELECT id, name FROM suppliers ORDER BY id").fetchall()
+        if index < 0 or index >= len(rows):
+            return None
+        removed = rows[index]["name"]
+        with conn:
+            conn.execute("DELETE FROM suppliers WHERE id = ?", (rows[index]["id"],))
     return removed
 
 
