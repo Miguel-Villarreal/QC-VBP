@@ -232,7 +232,7 @@
 
 **Goal**: Address stability, security, and efficiency issues identified in a comprehensive code review. Prioritized: stability first, then efficiency.
 
-**Current Status**: All 20 of 20 fixes completed. 27 backend tests passing (5 AQL + 9 database + 13 API integration). Frontend build clean. Changes committed locally, NOT yet pushed to GitHub or deployed to Fly.io.
+**Current Status**: All 20 of 20 fixes completed. 27 backend tests passing (5 AQL + 9 database + 13 API integration). Frontend build clean. All changes pushed to GitHub and deployed to Fly.io.
 
 ### Reference Documents
 - Full review: `code_review.md` (53 issues: 5 Critical, 14 High, 19 Medium, 15 Low)
@@ -256,7 +256,7 @@
 - **Fix 14**: Error handling (try/catch + `res.ok` check) on all `apiFetch` mutation calls across all 3 pages. i18n keys: `errorSaving`, `errorDeleting`, `errorLoading`.
 - **Fix 15**: Renamed misleading `releasedEvents` variable to `passedSectionEvents` in events page. Removed duplicate `loadData()` from `setSuggestedAction`.
 - **Fix 16**: Memoized all 3 context providers (`useMemo`/`useCallback`). Lazy `useState` initializers read localStorage synchronously (eliminates language/company flash on load). Removed `useEffect`-based localStorage reads.
-- **Fix 17**: Added `GET /api/health` endpoint (no auth). Dockerfile: `npm ci` instead of `npm install`, non-root `appuser`, `HEALTHCHECK`. docker-compose: `restart: unless-stopped`, healthcheck. fly.toml: `[[http_service.checks]]` for `/api/health`, removed redundant `memory = '1gb'`. .dockerignore: added `backend/credentials/`, `backups/`, WAL files.
+- **Fix 17**: Added `GET /api/health` endpoint (no auth). Dockerfile: `npm ci` instead of `npm install`, `HEALTHCHECK` (non-root user was added then reverted -- Fly.io volumes mount as root, causing permission crashes). docker-compose: `restart: unless-stopped`, healthcheck. fly.toml: `[[http_service.checks]]` for `/api/health`, removed redundant `memory = '1gb'`. .dockerignore: added `backend/credentials/`, `backups/`, WAL files.
 - **Fix 18**: Pydantic `Field()` constraints on all models: `min_length`/`max_length` on strings, `gt=0` on lot_size, `ge=0` on quantities.
 - **Fix 19**: Login rate limiting: 10 attempts per minute per IP, in-memory dict + threading lock, returns 429 on excess.
 - **Fix 20**: Test infrastructure: `conftest.py` (shared fixtures: fresh_db, TestClient, admin/non-admin tokens), `test_api.py` (13 integration tests covering health, login, auth, admin, validation, rate limiting). `test_database.py` simplified to use shared conftest.

@@ -2,7 +2,7 @@
 
 ## Current State: Steps 1-7 Complete, Step 8 On Hold, Step 9 COMPLETE (Code Review Fixes)
 
-All 7 steps from `plan.md` are complete. The app is live at `https://calidad.vbc.mx` (Fly.io pay-as-you-go, ~$2-3/month). Step 9 (code review stability/security fixes) is COMPLETE -- all 20 of 20 fixes done. 27 backend tests passing (5 AQL + 9 database + 13 API integration). Frontend build clean. Changes committed locally, NOT yet pushed to GitHub or deployed to Fly.io. See `code_review.md` for full findings and `code_review_fix_plan.md` for the fix plan.
+All 7 steps from `plan.md` are complete. The app is live at `https://calidad.vbc.mx` (Fly.io pay-as-you-go, ~$2-3/month). Step 9 (code review stability/security fixes) is COMPLETE -- all 20 of 20 fixes done. 27 backend tests passing (5 AQL + 9 database + 13 API integration). Frontend build clean. All changes pushed to GitHub and deployed to Fly.io. See `code_review.md` for full findings and `code_review_fix_plan.md` for the fix plan.
 
 ---
 
@@ -63,7 +63,7 @@ Login: username `user`, password `password`
 | `AQL Chart.xlsx` | User-provided spreadsheet with correct Ac/Re values (source of truth) |
 | `Event Display Output Template.pdf` | **Template for single-event PDF export** -- when updated, code must be updated to match (see PDF Export section) |
 | `VB Packaging Logo.JPG` | Company logo (copy also at `backend/data/logo.jpg`) |
-| `Dockerfile` | Multi-stage Docker build (Node 20 + Python 3.12-slim with uv) |
+| `Dockerfile` | Multi-stage Docker build (Node 20 + Python 3.12-slim with uv), `npm ci`, `HEALTHCHECK` (no non-root user -- incompatible with Fly.io volumes) |
 | `docker-compose.yml` | Single service with volumes for SQLite DB + uploads |
 | `.dockerignore` | Excludes node_modules, .next, __pycache__, .git |
 | `code_review.md` | Comprehensive code review findings (53 issues by severity) |
@@ -469,4 +469,5 @@ Layout:
   - Test infrastructure: `conftest.py` (shared fixtures), `test_api.py` (13 integration tests), `test_database.py` simplified to use shared conftest
   - 27 backend tests total (5 AQL + 9 database + 13 API integration), all passing
   - Frontend `npm run build` passes cleanly
-  - Step 9 fixes are committed locally but NOT yet pushed to GitHub or deployed to Fly.io
+  - Dockerfile non-root user (`appuser`) was reverted -- Fly.io volumes mount as root, causing permission denied crashes
+  - All Step 9 fixes pushed to GitHub and deployed to Fly.io (verified working at calidad.vbc.mx)
