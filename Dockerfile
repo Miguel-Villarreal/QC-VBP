@@ -25,11 +25,6 @@ COPY --from=frontend-build /app/frontend/out ./static
 # Create data and uploads directories
 RUN mkdir -p /app/backend/data /app/backend/uploads
 
-# Create non-root user
-RUN useradd --create-home --shell /bin/bash appuser \
-    && chown -R appuser:appuser /app/backend/data /app/backend/uploads
-USER appuser
-
 EXPOSE 8001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
