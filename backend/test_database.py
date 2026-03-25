@@ -111,6 +111,7 @@ def test_delete_nonexistent_user():
 def test_concurrent_product_creates():
     """10 threads creating products simultaneously should all succeed."""
     errors = []
+    results_lock = threading.Lock()
     results = []
 
     def create_one(i):
@@ -120,9 +121,11 @@ def test_concurrent_product_creates():
                 test_details="", supplier="", companies=["VBC"],
                 created_by="user", created_at="2026-01-01",
             )
-            results.append(p)
+            with results_lock:
+                results.append(p)
         except Exception as e:
-            errors.append(e)
+            with results_lock:
+                errors.append(e)
 
     threads = [threading.Thread(target=create_one, args=(i,)) for i in range(10)]
     for t in threads:
@@ -132,6 +135,7 @@ def test_concurrent_product_creates():
 
     assert len(errors) == 0, f"Concurrent writes failed: {errors}"
     assert len(results) == 10
+    assert all(p is not None for p in results), "Some creates returned None"
     names = {p["name"] for p in results}
     assert len(names) == 10  # all unique
 

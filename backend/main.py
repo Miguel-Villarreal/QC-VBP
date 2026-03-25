@@ -26,9 +26,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+_cors_origins = os.environ.get(
+    "CORS_ORIGINS",
+    "https://calidad.vbc.mx,http://localhost:3000,http://localhost:8001"
+).split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
