@@ -1,8 +1,8 @@
 # QC Inspector - Project Status
 
-## Current State: Steps 1-7 Complete -- Fully Deployed
+## Current State: Steps 1-7 Complete, Step 8 On Hold, Step 9 COMPLETE (Code Review Fixes)
 
-All 7 steps from `plan.md` are complete. The app is live at `https://qc-inspector-vbp.fly.dev`. Data persists in SQLite with JWT authentication. All prior features intact: AQL engine (ANSI/ASQ Z1.4), multi-company (VBC/VBP/All), i18n (EN/ES), PDF export, user management with granular permissions, failed events lifecycle, suppliers, pagination, sortable columns, Assigned To, Released Products, Google Sheets integration (8 Spanish tabs). Dockerized and deployed to Fly.io free tier.
+All 7 steps from `plan.md` are complete. The app is live at `https://calidad.vbc.mx` (Fly.io pay-as-you-go, ~$2-3/month). Step 9 (code review stability/security fixes) is COMPLETE -- all 20 of 20 fixes done. 27 backend tests passing (5 AQL + 9 database + 13 API integration). Frontend build clean. Changes committed locally, NOT yet pushed to GitHub or deployed to Fly.io. See `code_review.md` for full findings and `code_review_fix_plan.md` for the fix plan.
 
 ---
 
@@ -10,12 +10,13 @@ All 7 steps from `plan.md` are complete. The app is live at `https://qc-inspecto
 
 - **Frontend**: Next.js 15 (App Router) + React 19 + Tailwind CSS v4 -- static export served by backend. Dev server on port 3000.
 - **Backend**: Python FastAPI with SQLite database -- runs on port 8001
-- **Database**: SQLite with WAL mode. DB file at `backend/data/qc.db` (configurable via `DB_PATH` env var). 6 tables: users, products, events, pending_inspections, suggested_actions, suppliers.
+- **Database**: SQLite with WAL mode + threading lock for write safety. DB file at `backend/data/qc.db` (configurable via `DB_PATH` env var). 6 tables: users, products, events, pending_inspections, suggested_actions, suppliers. Indexes on `events.pass_fail`, `events.addressed`, `events.released`, `products.supplier`.
 - **Auth**: JWT tokens (24h expiry) via pyjwt + bcrypt password hashing. All `/api/*` routes protected except `/api/auth/login`. Token accepted via `Authorization: Bearer` header or `?token=` query param. Default admin: user/password (seeded on first run).
 - **i18n**: English/Spanish toggle via React Context, persisted in localStorage. PDFs also respect language setting.
 - **Company**: Multi-company support (VBC, VBP, All). Each product/event/pending inspection is tagged with companies. Dropdown in nav bar filters all views and creates. Users with restricted company_access see only their company (no dropdown).
 - **Persistence**: SQLite DB + file uploads survive backend restarts. Docker volumes for production.
-- **Hosting**: Fly.io free tier at `https://qc-inspector-vbp.fly.dev`. Persistent volume at `/data`.
+- **Hosting**: Fly.io pay-as-you-go (~$2-3/month). Machine ID `1850913b1d90e8`, region `dfw`, auto-stop/start. Custom domain: `https://calidad.vbc.mx`. Oracle Cloud migration on hold (ARM capacity unavailable in Monterrey).
+- **Backups**: Nightly at 11 PM via Windows Task Scheduler (`scripts/backup.ps1`). Stored at `C:\AI\QC\backups\`, keeps last 30. Manual: `/backupfly` skill.
 
 ---
 
@@ -44,7 +45,7 @@ scripts/start.bat   # Windows
 ```
 
 ### Production
-Live at `https://qc-inspector-vbp.fly.dev`. Redeploy with `flyctl deploy`.
+Live at `https://calidad.vbc.mx` (also `https://qc-inspector-vbp.fly.dev`). Redeploy with `flyctl deploy`.
 
 Login: username `user`, password `password`
 
@@ -65,6 +66,8 @@ Login: username `user`, password `password`
 | `Dockerfile` | Multi-stage Docker build (Node 20 + Python 3.12-slim with uv) |
 | `docker-compose.yml` | Single service with volumes for SQLite DB + uploads |
 | `.dockerignore` | Excludes node_modules, .next, __pycache__, .git |
+| `code_review.md` | Comprehensive code review findings (53 issues by severity) |
+| `code_review_fix_plan.md` | 20-fix plan with test plans and execution phases |
 | `fly.toml` | Fly.io deployment config (app: qc-inspector-vbp, region: dfw) |
 | `frontend/public/logo_VBC.png` | VBC logo for nav bar |
 | `frontend/public/logo_VBP.jpg` | VBP logo for nav bar |
@@ -72,17 +75,20 @@ Login: username `user`, password `password`
 ### Backend (`backend/`)
 | File | Purpose |
 |------|---------|
-| `main.py` | FastAPI application (~821 lines), all routes JWT-protected |
-| `database.py` | SQLite layer (~547 lines): 6 tables, CRUD, sheets-compatible getters |
-| `auth.py` | JWT + bcrypt auth (~50 lines): hash/verify password, create/decode token, require_auth dependency |
+| `main.py` | FastAPI application (~893 lines), all routes JWT-protected, admin routes use `require_admin`, health endpoint, rate limiting, Pydantic field constraints |
+| `database.py` | SQLite layer (~595 lines): 6 tables, CRUD, sheets-compatible getters, threading lock, transactions, indexes |
+| `auth.py` | JWT + bcrypt auth (~63 lines): hash/verify password, create/decode token, require_auth + require_admin dependencies, JWT secret warning |
 | `aql.py` | AQL lookup utility (code letter, sample size, accept/reject) |
 | `data/aql_table.json` | Machine-readable AQL tables (from ANSI/ASQ Z1.4) |
 | `data/qc.db` | SQLite database (created on first run, not in git) |
 | `test_aql.py` | Unit tests for AQL lookups (5 tests) |
+| `test_database.py` | Database tests (~152 lines): CRUD roundtrips, delete safety, concurrent write safety (9 tests) |
+| `test_api.py` | API integration tests (~114 lines): health, login, auth, admin, validation, rate limiting (13 tests) |
+| `conftest.py` | Shared test fixtures (~48 lines): fresh_db, TestClient, admin/non-admin tokens |
 | `sheets.py` | Google Sheets integration (~370 lines): auth, connection, sync functions for 8 tabs |
 | `credentials/service_account.json` | Google Cloud service account credentials for Sheets API |
 | `uploads/` | Uploaded QC Technical Doc files (persisted) |
-| `requirements.txt` | Python deps: `fastapi`, `uvicorn[standard]`, `reportlab`, `python-multipart`, `gspread`, `google-auth`, `pyjwt`, `bcrypt` |
+| `requirements.txt` | Python deps (all pinned): `fastapi==0.135.1`, `uvicorn[standard]==0.41.0`, `reportlab==4.4.10`, `python-multipart==0.0.22`, `gspread==6.2.1`, `google-auth==2.49.1`, `pyjwt==2.12.1`, `bcrypt==5.0.0` |
 
 ### Frontend (`frontend/`)
 | File | Purpose |
@@ -92,16 +98,16 @@ Login: username `user`, password `password`
 | `next.config.ts` | Config with `output: "export"` for static build |
 | `postcss.config.mjs` | Tailwind via `@tailwindcss/postcss` |
 | `app/globals.css` | Single line: `@import "tailwindcss"` |
-| `app/api.ts` | Auth fetch wrapper (~43 lines): `apiFetch()` adds JWT header, `apiUrl()` adds token query param |
-| `app/i18n.tsx` | i18n system (~315 lines, translations, I18nProvider, CompanyProvider, AuthProvider, useI18n, useCompany, useAuth hooks) |
+| `app/api.ts` | Auth fetch wrapper (~43 lines): `API_BASE` export, `apiFetch()` adds JWT header, `apiUrl()` adds token query param |
+| `app/i18n.tsx` | i18n system (~328 lines, ~148 translation keys, memoized I18nProvider/CompanyProvider/AuthProvider, useI18n, useCompany, useAuth hooks) |
 | `app/providers.tsx` | Client wrapper combining I18nProvider + AuthProvider + CompanyProvider |
 | `app/layout.tsx` | Root layout, page title "QC Inspector", wraps children with Providers |
 | `app/page.tsx` | Login page (username/password form, translated, sets company on login) |
-| `app/dashboard/layout.tsx` | Nav bar with tabs, company dropdown (or static label if restricted), language dropdown, auth check, sign out |
+| `app/dashboard/layout.tsx` | Nav bar with tabs, company dropdown (or static label if restricted), language dropdown, auth guard (no flash), sign out (~103 lines) |
 | `app/dashboard/page.tsx` | Redirects to `/dashboard/products` |
-| `app/dashboard/products/page.tsx` | Master List CRUD (~451 lines) with inspection level, AQL level, supplier, company filter, permission-gated, QC Technical Doc inline preview |
-| `app/dashboard/events/page.tsx` | Main events page (~1522 lines, most complex file), permission-gated actions, failed events workflow, pagination, sortable columns, Company column, Assigned To, Released Products |
-| `app/dashboard/users/page.tsx` | Admin-only user/settings management page (~425 lines, add/delete users with can_assign permission, suggested actions, suppliers) |
+| `app/dashboard/products/page.tsx` | Master List CRUD (~461 lines), delete confirmations, error handling on all API calls |
+| `app/dashboard/events/page.tsx` | Main events page (~1565 lines, most complex file), delete confirmations, error handling, `passedSectionEvents` variable |
+| `app/dashboard/users/page.tsx` | Admin-only user/settings management (~554 lines), password fields masked, delete confirmations, error handling |
 
 ### Scripts (`scripts/`)
 | File | Purpose |
@@ -110,12 +116,18 @@ Login: username `user`, password `password`
 | `stop.sh` | Stop Docker container (Mac/Linux) |
 | `start.bat` | Start Docker container (Windows) |
 | `stop.bat` | Stop Docker container (Windows) |
+| `backup.ps1` | Nightly DB backup from Fly.io (PowerShell). Downloads via `flyctl sftp`, keeps last 30 |
 
 ---
 
 ## API Endpoints
 
-**All endpoints except `/api/auth/login` require JWT authentication.** Pass `Authorization: Bearer <token>` header or `?token=<token>` query param.
+**All endpoints except `/api/auth/login` and `/api/health` require JWT authentication.** Pass `Authorization: Bearer <token>` header or `?token=<token>` query param.
+
+### Health
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/api/health` | Returns `{"status": "ok"}`. No auth required. Used by Docker/Fly.io health checks. |
 
 ### Auth
 | Method | Path | Body | Notes |
@@ -127,6 +139,7 @@ Login: username `user`, password `password`
 |--------|------|------|-------|
 | GET | `/api/users` | -- | Returns all users (password excluded) |
 | POST | `/api/users` | `{username, password, company_access, can_manage_products, can_delete_pending, can_delete_events, can_assign, ...}` | Creates non-admin user with granular permissions |
+| PATCH | `/api/users/{username}` | `{new_username?, new_password?, company_access?, can_manage_products?, ...}` | Updates user fields (username, password, permissions). Only provided fields are changed |
 | DELETE | `/api/users/{username}` | -- | Deletes user (admin cannot be deleted) |
 
 ### Reference Data
@@ -179,7 +192,7 @@ Login: username `user`, password `password`
 | Method | Path | Body | Notes |
 |--------|------|------|-------|
 | PUT | `/api/events/{id}/suggested-action` | `{suggested_action}` | Sets suggested action on a failed event |
-| PUT | `/api/events/{id}/address` | `{addressed_date}` | Marks a failed event as addressed |
+| PUT | `/api/events/{id}/address` | `{addressed_date}` | Marks a failed event as addressed. `addressed_by` set from JWT token. |
 | PUT | `/api/events/{id}/unaddress` | -- | Unmarks an addressed event |
 
 ### Assignment & Release
@@ -187,7 +200,7 @@ Login: username `user`, password `password`
 |--------|------|------|-------|
 | PATCH | `/api/pending/{id}/assign` | `{assigned_to}` | Assign a user to a pending inspection |
 | PATCH | `/api/events/{id}/assign` | `{assigned_to}` | Assign a user to an event (Awaiting Fix) |
-| PATCH | `/api/events/{id}/release` | `{released_by}` | Release/unrelease a passed event. Toggle: sets `released=true/false`, `released_date`, `released_by` |
+| PATCH | `/api/events/{id}/release` | `{released_date}` | Release/unrelease a passed event. Toggle: sets `released=true/false`, `released_date`, `released_by` (from JWT token) |
 
 ### Google Sheets
 | Method | Path | Notes |
@@ -304,7 +317,8 @@ AQL values are sourced from ANSI/ASQ Z1.4-2003 (R2018), verified against user-pr
 - Add user form: username, password, company access dropdown, permission checkboxes (manage products, edit/delete pending, edit/delete events, set suggested action, mark/edit/delete addressed, assign users)
 - Suggested Actions management: add/delete configurable actions used in Failed Events workflow
 - Suppliers management: add/delete supplier names used in product creation (cascade on delete sets products to "pending")
-- Table: Username, Company Access, permissions columns, Delete button
+- Table: Username, Company Access, permissions columns, Edit/Delete buttons
+- Inline edit mode: blue background row with username input, password input (blank = keep current), company dropdown, permission checkboxes, Save/Cancel
 - Admin user has yellow "Admin" badge and cannot be deleted
 - Non-admin users see "Access denied" if they navigate to this page
 
@@ -387,14 +401,16 @@ Layout:
 | 4 | Connect AQL to Events (dropdowns, auto-calculate pass/fail, populate Suggested Qty) | COMPLETE |
 | 5 | Google Sheets integration (8 Spanish tabs, full sync on every mutation) | COMPLETE |
 | 6 | SQLite persistence, JWT auth, Docker container, start/stop scripts | COMPLETE |
-| 7 | Cloud deployment to Fly.io (`https://qc-inspector-vbp.fly.dev`) | COMPLETE |
+| 7 | Cloud deployment to Fly.io (`https://qc-inspector-vbp.fly.dev`) | COMPLETE (trial expired) |
+| 8 | Migrate to Oracle Cloud Free Tier + Coolify (git-push-to-deploy) | ON HOLD (ARM capacity unavailable) |
+| 9 | Code review stability & security fixes (see `code_review_fix_plan.md`) | COMPLETE (20/20 fixes, 27 tests passing) |
 
 ---
 
 ## Technical Notes
 
 - Backend uses port 8001 (port 8000 was occupied by another app)
-- Frontend API URL configured via `NEXT_PUBLIC_API_URL` env var, defaults to `http://localhost:8001`. Set to empty string for Docker (same-origin).
+- Frontend API URL configured via `NEXT_PUBLIC_API_URL` env var, defaults to `http://localhost:8001`. Set to empty string for Docker (same-origin). Uses `??` (nullish coalescing) not `||` -- empty string must be preserved as same-origin, not fall through to localhost.
 - Frontend uses `apiFetch()` wrapper (from `app/api.ts`) for all authenticated API calls. `apiUrl()` used for href/iframe/img that need token as query param.
 - SQLite DB path configurable via `DB_PATH` env var (default: `backend/data/qc.db`). Uploads dir via `UPLOADS_DIR` env var (default: `backend/uploads/`).
 - JWT secret configurable via `JWT_SECRET` env var. Tokens expire after 24 hours.
@@ -402,13 +418,16 @@ Layout:
 - Database uses WAL mode for better concurrent read performance.
 - passlib was NOT used due to incompatibility with Python 3.14 + bcrypt 5.x. Using `bcrypt` library directly instead.
 - Next.js configured with `output: "export"` for static build. The `out/` directory is copied to `backend/static/` in Docker.
-- Fly.io deployment: single 1GB shared VM in `dfw` region, persistent volume at `/data`, auto-stop/start enabled.
+- Fly.io deployment (active, pay-as-you-go ~$2-3/month): machine `1850913b1d90e8`, shared-cpu-1x, `dfw` region, persistent volume `vol_4qg50lz9yx7l7ngv` (1 GB) at `/data`, auto-stop/start enabled.
+- Oracle Cloud migration (Step 8, ON HOLD): account created in Monterrey region, VCN `qc-vcn` + public subnet ready, but ARM instances out of capacity. E2.1.Micro not available in Monterrey. Cannot create second Oracle account.
+- Nightly DB backup: `scripts/backup.ps1` via Windows Task Scheduler at 11 PM. Downloads `qc.db` from Fly.io volume. Keeps last 30 backups in `C:\AI\QC\backups\`.
+- Backup: `flyctl sftp get /data/qc.db <path> -a qc-inspector-vbp`. Restore: `flyctl sftp shell` -> `put file /data/qc.db` -> restart machine.
 - Tailwind v4 uses the new `@tailwindcss/postcss` plugin pattern (not the v3 config approach)
 - All frontend pages are `"use client"` components
 - Container width on events page is `max-w-5xl`
 - AQL lookup is lot-size-based (lot size + inspection level -> code letter -> sample size + Ac/Re)
 - Multi-company: records store `companies` as a list (e.g. `["VBC"]` or `["VBC", "VBP"]`). "All" in the UI means both companies.
-- i18n: translations defined in `frontend/app/i18n.tsx`, ~140 keys. Language and company choice persisted in localStorage.
+- i18n: translations defined in `frontend/app/i18n.tsx`, ~148 keys. Language and company choice persisted in localStorage (lazy initializers, no flash).
 - All displayed numbers on Events page use `.toLocaleString()` for comma formatting
 - Failed events lifecycle: Failed Events (no action) -> assign suggested action -> Awaiting Fix -> mark addressed -> Passed Events (with wrench icon)
 - Pagination: all event section tables paginated client-side (10/20/50 per page). Pagination controls hidden when <= 10 items. Page resets to 1 on data change or sort change.
@@ -420,4 +439,34 @@ Layout:
 - Released Products: events with `released=true` are excluded from Passed Events and shown in dedicated Released Products section
 - Google Sheets: connected to spreadsheet ID `1UGkWVxGPviinHZCspemdirrVHOxscDbmsvsPi-yRwqo` via service account. Full-overwrite sync (clear + rewrite) on every data mutation. All content always in Spanish regardless of web app language. 8 tabs: Lista Maestra, Inspecciones Pendientes, Eventos Fallidos, En Espera de Correccion, Eventos Aprobados, Productos Liberados, Acciones Sugeridas, Proveedores.
 - GitHub repo: https://github.com/Miguel-Villarreal/QC-VBP
-- Production URL: https://qc-inspector-vbp.fly.dev
+- Custom domain: `calidad.vbc.mx` -> Fly.io via A/AAAA DNS records (managed in InMotion Hosting, not Squarespace). DNS nameservers: `ns1.clico.mx` / `ns2.clico.mx`.
+- Production URLs: https://qc-inspector-vbp.fly.dev and https://calidad.vbc.mx
+- Custom commands: `/test` (local dev servers), `/fly` (deploy to Fly.io), `/commit` (git commit + push), `/saveupdate` (update docs), `/newcontext` (resume context), `/backupfly` (manual DB backup)
+- Deployment workflow: `/test` (local testing) -> `/commit` (git + push) -> `/fly` (deploy via PowerShell)
+- **Step 9 changes (code review fixes, COMPLETE -- 20/20 fixes)**:
+  - All Python deps pinned to exact versions in `requirements.txt`
+  - `database.py` now uses `threading.Lock` around all write operations + `with conn:` context manager for auto-commit/rollback
+  - Database indexes added on `events.pass_fail`, `events.addressed`, `events.released`, `products.supplier`
+  - `created_by` on products/events/pending, `addressed_by`, and `released_by` are now set server-side from the JWT token (client-supplied values ignored)
+  - `require_admin` dependency in `auth.py` enforces admin-only access on user CRUD, suggested action, and supplier write routes (returns 403 for non-admins)
+  - Login endpoint uses `LoginRequest` Pydantic model (returns 422 on missing/invalid fields instead of 500)
+  - Delete user response strips `password_hash` field
+  - File upload limited to 10 MB (returns 413 on oversize)
+  - JWT secret prints stderr warning when using default value; `docker-compose.yml` requires `JWT_SECRET` env var
+  - CORS restricted to `CORS_ORIGINS` env var (defaults to `calidad.vbc.mx,localhost:3000,localhost:8001`)
+  - Login page uses shared `API_BASE` from `api.ts` (no duplicated env var logic)
+  - Dashboard auth guard returns `null` until token verified (no content flash)
+  - Password fields use `type="password"` (new-user and edit-user forms)
+  - Delete confirmation dialogs on all delete actions across all pages (i18n key: `confirmDelete`)
+  - Error handling (try/catch + `res.ok`) on all frontend `apiFetch` mutation calls (i18n keys: `errorSaving`, `errorDeleting`, `errorLoading`)
+  - Renamed `releasedEvents` -> `passedSectionEvents` in events page; removed duplicate `loadData()` from `setSuggestedAction`
+  - Context providers memoized (`useMemo`/`useCallback`); lazy `useState` initializers for localStorage reads (no language/company flash)
+  - `GET /api/health` endpoint (no auth) for Docker/Fly.io health checks
+  - Dockerfile: `npm ci`, non-root `appuser`, `HEALTHCHECK`; docker-compose: `restart: unless-stopped`, healthcheck; fly.toml: `[[http_service.checks]]`, removed redundant `memory = '1gb'`
+  - .dockerignore: added `backend/credentials/`, `backups/`, WAL files
+  - Pydantic `Field()` constraints: `min_length`/`max_length` on strings, `gt=0` on lot_size, `ge=0` on quantities
+  - Login rate limiting: 10 attempts/min per IP, returns 429 on excess
+  - Test infrastructure: `conftest.py` (shared fixtures), `test_api.py` (13 integration tests), `test_database.py` simplified to use shared conftest
+  - 27 backend tests total (5 AQL + 9 database + 13 API integration), all passing
+  - Frontend `npm run build` passes cleanly
+  - Step 9 fixes are committed locally but NOT yet pushed to GitHub or deployed to Fly.io

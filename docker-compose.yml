@@ -9,6 +9,13 @@ services:
     environment:
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env file or environment}
       - DB_PATH=/app/backend/data/qc.db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/api/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 
 volumes:
   qc-data:

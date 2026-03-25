@@ -157,21 +157,24 @@ export default function EventsPage() {
   // --- Schedule ---
   async function handleSchedule(e: React.FormEvent) {
     e.preventDefault();
-    await apiFetch(`/api/pending`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        product_id: Number(productId),
-        direction,
-        lot_size: Number(pendingLotSize),
-        estimated_date: pendingDate,
-        company,
-        created_by: perms.username,
-      }),
-    });
-    setPendingLotSize("");
-    setPendingDate("");
-    loadData();
+    try {
+      const res = await apiFetch(`/api/pending`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          product_id: Number(productId),
+          direction,
+          lot_size: Number(pendingLotSize),
+          estimated_date: pendingDate,
+          company,
+          created_by: perms.username,
+        }),
+      });
+      if (!res.ok) { alert(t("errorSaving")); return; }
+      setPendingLotSize("");
+      setPendingDate("");
+      loadData();
+    } catch { alert(t("errorSaving")); }
   }
 
   // --- Inspect from pending ---
@@ -199,28 +202,31 @@ export default function EventsPage() {
 
   async function handleCompleteInspection(e: React.FormEvent) {
     e.preventDefault();
-    await apiFetch(`/api/events`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        product_id: Number(productId),
-        direction,
-        lot_size: Number(lotSize),
-        quantity_inspected: Number(qtyInspected),
-        quantity_non_conforming: Number(qtyNonConforming),
-        date_inspected: dateInspected,
-        pending_id: activePending?.id ?? null,
-        company,
-        created_by: perms.username,
-      }),
-    });
-    setActivePending(null);
-    setLotSize("");
-    setQtyInspected("");
-    setQtyNonConforming("");
-    setDateInspected("");
-    setAqlPreview(null);
-    loadData();
+    try {
+      const res = await apiFetch(`/api/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          product_id: Number(productId),
+          direction,
+          lot_size: Number(lotSize),
+          quantity_inspected: Number(qtyInspected),
+          quantity_non_conforming: Number(qtyNonConforming),
+          date_inspected: dateInspected,
+          pending_id: activePending?.id ?? null,
+          company,
+          created_by: perms.username,
+        }),
+      });
+      if (!res.ok) { alert(t("errorSaving")); return; }
+      setActivePending(null);
+      setLotSize("");
+      setQtyInspected("");
+      setQtyNonConforming("");
+      setDateInspected("");
+      setAqlPreview(null);
+      loadData();
+    } catch { alert(t("errorSaving")); }
   }
 
   // --- Edit/Delete Pending ---
@@ -233,23 +239,30 @@ export default function EventsPage() {
   }
 
   async function saveEditPending(id: number) {
-    await apiFetch(`/api/pending/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        product_id: Number(editPendingProductId),
-        direction: editPendingDirection,
-        lot_size: Number(editPendingLotSize),
-        estimated_date: editPendingDate,
-      }),
-    });
-    setEditingPendingId(null);
-    loadData();
+    try {
+      const res = await apiFetch(`/api/pending/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          product_id: Number(editPendingProductId),
+          direction: editPendingDirection,
+          lot_size: Number(editPendingLotSize),
+          estimated_date: editPendingDate,
+        }),
+      });
+      if (!res.ok) { alert(t("errorSaving")); return; }
+      setEditingPendingId(null);
+      loadData();
+    } catch { alert(t("errorSaving")); }
   }
 
   async function deletePending(id: number) {
-    await apiFetch(`/api/pending/${id}`, { method: "DELETE" });
-    loadData();
+    if (!confirm(t("confirmDelete"))) return;
+    try {
+      const res = await apiFetch(`/api/pending/${id}`, { method: "DELETE" });
+      if (!res.ok) { alert(t("errorDeleting")); return; }
+      loadData();
+    } catch { alert(t("errorDeleting")); }
   }
 
   // --- Edit/Delete Event ---
@@ -264,25 +277,32 @@ export default function EventsPage() {
   }
 
   async function saveEditEvent(id: number) {
-    await apiFetch(`/api/events/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        product_id: Number(editEventProductId),
-        direction: editEventDirection,
-        lot_size: Number(editEventLotSize),
-        quantity_inspected: Number(editEventQtyInspected),
-        quantity_non_conforming: Number(editEventQtyNonConforming),
-        date_inspected: editEventDateInspected,
-      }),
-    });
-    setEditingEventId(null);
-    loadData();
+    try {
+      const res = await apiFetch(`/api/events/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          product_id: Number(editEventProductId),
+          direction: editEventDirection,
+          lot_size: Number(editEventLotSize),
+          quantity_inspected: Number(editEventQtyInspected),
+          quantity_non_conforming: Number(editEventQtyNonConforming),
+          date_inspected: editEventDateInspected,
+        }),
+      });
+      if (!res.ok) { alert(t("errorSaving")); return; }
+      setEditingEventId(null);
+      loadData();
+    } catch { alert(t("errorSaving")); }
   }
 
   async function deleteEvent(id: number) {
-    await apiFetch(`/api/events/${id}`, { method: "DELETE" });
-    loadData();
+    if (!confirm(t("confirmDelete"))) return;
+    try {
+      const res = await apiFetch(`/api/events/${id}`, { method: "DELETE" });
+      if (!res.ok) { alert(t("errorDeleting")); return; }
+      loadData();
+    } catch { alert(t("errorDeleting")); }
   }
 
   // Addressed fails editing
@@ -291,57 +311,75 @@ export default function EventsPage() {
   const [editAddressedAction, setEditAddressedAction] = useState("");
 
   async function handleAddress(eventId: number, addressedDate: string) {
-    await apiFetch(`/api/events/${eventId}/address`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ addressed: true, addressed_date: addressedDate, addressed_by: perms.username }),
-    });
-    loadData();
+    try {
+      const res = await apiFetch(`/api/events/${eventId}/address`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addressed: true, addressed_date: addressedDate, addressed_by: perms.username }),
+      });
+      if (!res.ok) { alert(t("errorSaving")); return; }
+      loadData();
+    } catch { alert(t("errorSaving")); }
   }
 
   async function assignPending(pendingId: number, assignedTo: string) {
-    await apiFetch(`/api/pending/${pendingId}/assign`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ assigned_to: assignedTo }),
-    });
-    loadData();
+    try {
+      const res = await apiFetch(`/api/pending/${pendingId}/assign`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assigned_to: assignedTo }),
+      });
+      if (!res.ok) { alert(t("errorSaving")); return; }
+      loadData();
+    } catch { alert(t("errorSaving")); }
   }
 
   async function assignEvent(eventId: number, assignedTo: string) {
-    await apiFetch(`/api/events/${eventId}/assign`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ assigned_to: assignedTo }),
-    });
-    loadData();
+    try {
+      const res = await apiFetch(`/api/events/${eventId}/assign`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assigned_to: assignedTo }),
+      });
+      if (!res.ok) { alert(t("errorSaving")); return; }
+      loadData();
+    } catch { alert(t("errorSaving")); }
   }
 
   async function handleRelease(eventId: number, releaseDate: string) {
-    await apiFetch(`/api/events/${eventId}/release`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ released: true, released_date: releaseDate, released_by: perms.username }),
-    });
-    loadData();
+    try {
+      const res = await apiFetch(`/api/events/${eventId}/release`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ released: true, released_date: releaseDate, released_by: perms.username }),
+      });
+      if (!res.ok) { alert(t("errorSaving")); return; }
+      loadData();
+    } catch { alert(t("errorSaving")); }
   }
 
   async function handleUnrelease(eventId: number) {
-    await apiFetch(`/api/events/${eventId}/release`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ released: false }),
-    });
-    loadData();
+    try {
+      const res = await apiFetch(`/api/events/${eventId}/release`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ released: false }),
+      });
+      if (!res.ok) { alert(t("errorSaving")); return; }
+      loadData();
+    } catch { alert(t("errorSaving")); }
   }
 
   async function handleUnaddress(eventId: number) {
-    await apiFetch(`/api/events/${eventId}/address`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ addressed: false }),
-    });
-    loadData();
+    try {
+      const res = await apiFetch(`/api/events/${eventId}/address`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addressed: false }),
+      });
+      if (!res.ok) { alert(t("errorSaving")); return; }
+      loadData();
+    } catch { alert(t("errorSaving")); }
   }
 
   function startEditAddressed(ev: QCEvent) {
@@ -351,23 +389,28 @@ export default function EventsPage() {
   }
 
   async function saveEditAddressed(id: number) {
-    await setSuggestedAction(id, editAddressedAction);
-    await apiFetch(`/api/events/${id}/address`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ addressed: true, addressed_date: editAddressedDate }),
-    });
-    setEditingAddressedId(null);
-    loadData();
+    try {
+      await setSuggestedAction(id, editAddressedAction);
+      const res = await apiFetch(`/api/events/${id}/address`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addressed: true, addressed_date: editAddressedDate }),
+      });
+      if (!res.ok) { alert(t("errorSaving")); return; }
+      setEditingAddressedId(null);
+      loadData();
+    } catch { alert(t("errorSaving")); }
   }
 
   async function setSuggestedAction(eventId: number, action: string) {
-    await apiFetch(`/api/events/${eventId}/suggested-action`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ suggested_action: action }),
-    });
-    loadData();
+    try {
+      const res = await apiFetch(`/api/events/${eventId}/suggested-action`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ suggested_action: action }),
+      });
+      if (!res.ok) { alert(t("errorSaving")); }
+    } catch { alert(t("errorSaving")); }
   }
 
   // Split events into categories
@@ -383,7 +426,7 @@ export default function EventsPage() {
   const addressedEvents = events.filter(
     (ev) => ev.pass_fail === "fail" && ev.suggested_action && ev.addressed && !ev.released
   );
-  const releasedEvents = [...passedEvents, ...addressedEvents];
+  const passedSectionEvents = [...passedEvents, ...addressedEvents];
   const releasedProducts = events.filter((ev) => ev.released);
 
   // Address date state for inline mark-addressed form
@@ -413,7 +456,7 @@ export default function EventsPage() {
   useEffect(() => { setPendingPage(1); }, [pending.length]);
   useEffect(() => { setFailedNewPage(1); }, [completedFailedEvents.length]);
   useEffect(() => { setAwaitingPage(1); }, [failedEvents.length]);
-  useEffect(() => { setReleasedPage(1); }, [releasedEvents.length]);
+  useEffect(() => { setReleasedPage(1); }, [passedSectionEvents.length]);
   useEffect(() => { setReleasedProdsPage(1); }, [releasedProducts.length]);
 
   function toggleSort(
@@ -1184,7 +1227,7 @@ export default function EventsPage() {
       {/* --- Passed Events (passed + addressed fails merged) --- */}
       <section>
         <h2 className="text-xl font-bold mb-4">{t("passedEvents")}</h2>
-        {releasedEvents.length === 0 ? (
+        {passedSectionEvents.length === 0 ? (
           <p className="text-gray-500">{t("noPassedEvents")}</p>
         ) : (
           <div className="overflow-x-auto">
@@ -1208,7 +1251,7 @@ export default function EventsPage() {
                 </tr>
               </thead>
               <tbody>
-                {paginate(sortItems(releasedEvents, releasedSort.key, releasedSort.dir), releasedPage, releasedPerPage).map((ev) =>
+                {paginate(sortItems(passedSectionEvents, releasedSort.key, releasedSort.dir), releasedPage, releasedPerPage).map((ev) =>
                   ev.addressed && editingAddressedId === ev.id ? (
                     <tr key={ev.id} className="border-b bg-yellow-50">
                       <td className="px-2 py-2 text-center">
@@ -1441,7 +1484,7 @@ export default function EventsPage() {
                 )}
               </tbody>
             </table>
-            <PaginationControls total={releasedEvents.length} page={releasedPage} perPage={releasedPerPage} setPage={setReleasedPage} setPerPage={setReleasedPerPage} />
+            <PaginationControls total={passedSectionEvents.length} page={releasedPage} perPage={releasedPerPage} setPage={setReleasedPage} setPerPage={setReleasedPerPage} />
           </div>
         )}
       </section>

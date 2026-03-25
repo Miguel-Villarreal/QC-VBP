@@ -5,5 +5,9 @@ frontend/out
 __pycache__
 *.pyc
 backend/data/qc.db
+backend/data/qc.db-shm
+backend/data/qc.db-wal
+backend/credentials/
+backups/
 .git
 .claude

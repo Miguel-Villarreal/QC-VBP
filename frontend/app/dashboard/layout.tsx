@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useI18n, Lang, useCompany, Company, useAuth } from "../i18n";
 
 export default function DashboardLayout({
@@ -16,6 +16,8 @@ export default function DashboardLayout({
   const { company, setCompany } = useCompany();
   const { perms } = useAuth();
 
+  const [ready, setReady] = useState(false);
+
   const navItems = [
     { href: "/dashboard/products", label: t("masterList") },
     { href: "/dashboard/events", label: t("events") },
@@ -25,8 +27,12 @@ export default function DashboardLayout({
   useEffect(() => {
     if (!localStorage.getItem("token")) {
       router.push("/");
+    } else {
+      setReady(true);
     }
   }, [router]);
+
+  if (!ready) return null;
 
   function handleLogout() {
     localStorage.removeItem("token");

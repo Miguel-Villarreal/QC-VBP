@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -13,6 +13,9 @@ import sheets
 import shutil
 import database
 import auth
+
+import time
+import threading as _threading
 
 UPLOADS_DIR = Path(os.environ.get("UPLOADS_DIR", str(Path(__file__).parent / "uploads")))
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -51,12 +54,12 @@ INSPECTION_LEVELS = ["I", "II", "III", "S-1", "S-2", "S-3", "S-4"]
 COMPANIES = ["VBC", "VBP"]
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=200)
 
 class UserCreate(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=200)
     company_access: str = "All"
     can_manage_products: bool = True
     can_edit_pending: bool = True
@@ -85,47 +88,76 @@ class UserUpdate(BaseModel):
     can_assign: bool | None = None
 
 class ProductCreate(BaseModel):
-    name: str
-    inspection_level: str
-    aql_level: str
-    test_details: str = ""
-    supplier: str = ""
+    name: str = Field(min_length=1, max_length=200)
+    inspection_level: str = Field(min_length=1, max_length=10)
+    aql_level: str = Field(min_length=1, max_length=10)
+    test_details: str = Field(default="", max_length=500)
+    supplier: str = Field(default="", max_length=200)
     company: str = "All"
     created_by: str = "user"
 
 class PendingInspectionCreate(BaseModel):
     product_id: int
-    direction: str
-    lot_size: int
-    estimated_date: str
+    direction: str = Field(min_length=1, max_length=50)
+    lot_size: int = Field(gt=0)
+    estimated_date: str = Field(min_length=1, max_length=20)
     company: str = "All"
     created_by: str = "user"
     assigned_to: str = ""
 
 class EventCreate(BaseModel):
     product_id: int
-    direction: str
-    lot_size: int
-    quantity_inspected: int
-    quantity_non_conforming: int
-    date_inspected: str
+    direction: str = Field(min_length=1, max_length=50)
+    lot_size: int = Field(gt=0)
+    quantity_inspected: int = Field(ge=0)
+    quantity_non_conforming: int = Field(ge=0)
+    date_inspected: str = Field(min_length=1, max_length=20)
     pending_id: int | None = None
     company: str = "All"
     created_by: str = "user"
 
 class EventUpdate(BaseModel):
     product_id: int
-    direction: str
-    lot_size: int
-    quantity_inspected: int
-    quantity_non_conforming: int
-    date_inspected: str
+    direction: str = Field(min_length=1, max_length=50)
+    lot_size: int = Field(gt=0)
+    quantity_inspected: int = Field(ge=0)
+    quantity_non_conforming: int = Field(ge=0)
+    date_inspected: str = Field(min_length=1, max_length=20)
+
+
+# --- Rate Limiting (login) ---
+
+_login_attempts: dict[str, list[float]] = {}
+_login_lock = _threading.Lock()
+_LOGIN_LIMIT = 10
+_LOGIN_WINDOW = 60  # seconds
+
+def _check_rate_limit(ip: str) -> bool:
+    now = time.time()
+    with _login_lock:
+        attempts = _login_attempts.get(ip, [])
+        attempts = [t for t in attempts if now - t < _LOGIN_WINDOW]
+        _login_attempts[ip] = attempts
+        if len(attempts) >= _LOGIN_LIMIT:
+            return False
+        attempts.append(now)
+        return True
+
+
+# --- Health ---
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok"}
 
 
 # --- Auth ---
 
 @app.post("/api/auth/login")
-def login(data: LoginRequest):
+def login(data: LoginRequest, request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
     username = data.username
     password = data.password
     u = database.get_user(username)

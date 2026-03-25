@@ -1,27 +1,6 @@
 """Tests for database.py -- connection safety, CRUD roundtrips, concurrent writes."""
-import os
-import sys
 import threading
-import tempfile
-
-# Use a temporary DB for tests
-_tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-_tmp.close()
-os.environ["DB_PATH"] = _tmp.name
-
 import database
-
-
-def setup_module():
-    database._conn = None  # force fresh connection to temp DB
-    database.init_db()
-
-
-def teardown_module():
-    if database._conn:
-        database._conn.close()
-        database._conn = None
-    os.unlink(_tmp.name)
 
 
 # --- Roundtrip tests ---

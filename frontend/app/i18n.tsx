@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useMemo, useCallback, ReactNode } from "react";
 
 export type Lang = "en" | "es";
 
@@ -157,6 +157,12 @@ const translations = {
   resolvedBy: { en: "Resolved By", es: "Resuelto Por" },
   unassigned: { en: "-- Unassigned --", es: "-- Sin asignar --" },
 
+  // Confirmations & Errors
+  confirmDelete: { en: "Are you sure you want to delete this?", es: "Seguro que desea eliminar esto?" },
+  errorSaving: { en: "Error saving. Please try again.", es: "Error al guardar. Intente de nuevo." },
+  errorDeleting: { en: "Error deleting. Please try again.", es: "Error al eliminar. Intente de nuevo." },
+  errorLoading: { en: "Error loading data. Please refresh.", es: "Error al cargar datos. Actualice la pagina." },
+
   // Released Products
   releaseProducts: { en: "Release Products", es: "Liberar Productos" },
   releasedProducts: { en: "Released Products", es: "Productos Liberados" },
@@ -182,24 +188,25 @@ const I18nContext = createContext<I18nContextType>({
 });
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>("en");
-
-  useEffect(() => {
+  const [lang, setLangState] = useState<Lang>(() => {
+    if (typeof window === "undefined") return "en";
     const saved = localStorage.getItem("lang") as Lang | null;
-    if (saved === "en" || saved === "es") setLangState(saved);
-  }, []);
+    return (saved === "en" || saved === "es") ? saved : "en";
+  });
 
-  function setLang(l: Lang) {
+  const setLang = useCallback((l: Lang) => {
     setLangState(l);
     localStorage.setItem("lang", l);
-  }
+  }, []);
 
-  function t(key: TKey): string {
+  const t = useCallback((key: TKey): string => {
     return translations[key][lang];
-  }
+  }, [lang]);
+
+  const value = useMemo(() => ({ lang, setLang, t }), [lang, setLang, t]);
 
   return (
-    <I18nContext.Provider value={{ lang, setLang, t }}>
+    <I18nContext.Provider value={value}>
       {children}
     </I18nContext.Provider>
   );
@@ -224,20 +231,21 @@ const CompanyContext = createContext<CompanyContextType>({
 });
 
 export function CompanyProvider({ children }: { children: ReactNode }) {
-  const [company, setCompanyState] = useState<Company>("All");
-
-  useEffect(() => {
+  const [company, setCompanyState] = useState<Company>(() => {
+    if (typeof window === "undefined") return "All";
     const saved = localStorage.getItem("company") as Company | null;
-    if (saved === "All" || saved === "VBC" || saved === "VBP") setCompanyState(saved);
-  }, []);
+    return (saved === "All" || saved === "VBC" || saved === "VBP") ? saved : "All";
+  });
 
-  function setCompany(c: Company) {
+  const setCompany = useCallback((c: Company) => {
     setCompanyState(c);
     localStorage.setItem("company", c);
-  }
+  }, []);
+
+  const value = useMemo(() => ({ company, setCompany }), [company, setCompany]);
 
   return (
-    <CompanyContext.Provider value={{ company, setCompany }}>
+    <CompanyContext.Provider value={value}>
       {children}
     </CompanyContext.Provider>
   );
@@ -292,22 +300,24 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [perms, setPermsState] = useState<UserPermissions>(defaultPerms);
-
-  useEffect(() => {
+  const [perms, setPermsState] = useState<UserPermissions>(() => {
+    if (typeof window === "undefined") return defaultPerms;
     const saved = localStorage.getItem("userPerms");
     if (saved) {
-      try { setPermsState(JSON.parse(saved)); } catch { /* ignore */ }
+      try { return JSON.parse(saved); } catch { /* ignore */ }
     }
-  }, []);
+    return defaultPerms;
+  });
 
-  function setPerms(p: UserPermissions) {
+  const setPerms = useCallback((p: UserPermissions) => {
     setPermsState(p);
     localStorage.setItem("userPerms", JSON.stringify(p));
-  }
+  }, []);
+
+  const value = useMemo(() => ({ perms, setPerms }), [perms, setPerms]);
 
   return (
-    <AuthContext.Provider value={{ perms, setPerms }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

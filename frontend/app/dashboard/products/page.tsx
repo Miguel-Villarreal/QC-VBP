@@ -65,35 +65,42 @@ export default function ProductsPage() {
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!newName.trim()) return;
-    const res = await apiFetch(`/api/products`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: newName.trim(),
-        inspection_level: newInspLevel,
-        aql_level: newAql,
-        test_details: newTestDetails,
-        supplier: newSupplier,
-        company,
-        created_by: perms.username,
-      }),
-    });
-    const created = await res.json();
-    if (newFile) {
-      const fd = new FormData();
-      fd.append("file", newFile);
-      await apiFetch(`/api/products/${created.id}/file`, { method: "POST", body: fd });
-      setNewFile(null);
-    }
-    setNewName("");
-    setNewTestDetails("");
-    setNewSupplier("");
-    loadProducts();
+    try {
+      const res = await apiFetch(`/api/products`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newName.trim(),
+          inspection_level: newInspLevel,
+          aql_level: newAql,
+          test_details: newTestDetails,
+          supplier: newSupplier,
+          company,
+          created_by: perms.username,
+        }),
+      });
+      if (!res.ok) { alert(t("errorSaving")); return; }
+      const created = await res.json();
+      if (newFile) {
+        const fd = new FormData();
+        fd.append("file", newFile);
+        await apiFetch(`/api/products/${created.id}/file`, { method: "POST", body: fd });
+        setNewFile(null);
+      }
+      setNewName("");
+      setNewTestDetails("");
+      setNewSupplier("");
+      loadProducts();
+    } catch { alert(t("errorSaving")); }
   }
 
   async function handleDelete(id: number) {
-    await apiFetch(`/api/products/${id}`, { method: "DELETE" });
-    loadProducts();
+    if (!confirm(t("confirmDelete"))) return;
+    try {
+      const res = await apiFetch(`/api/products/${id}`, { method: "DELETE" });
+      if (!res.ok) { alert(t("errorDeleting")); return; }
+      loadProducts();
+    } catch { alert(t("errorDeleting")); }
   }
 
   function startEdit(p: Product) {
@@ -118,20 +125,23 @@ export default function ProductsPage() {
   }
 
   async function saveEdit(id: number) {
-    await apiFetch(`/api/products/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: editName.trim(),
-        inspection_level: editInspLevel,
-        aql_level: editAql,
-        test_details: editTestDetails,
-        supplier: editSupplier,
-        company,
-      }),
-    });
-    setEditingId(null);
-    loadProducts();
+    try {
+      const res = await apiFetch(`/api/products/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editName.trim(),
+          inspection_level: editInspLevel,
+          aql_level: editAql,
+          test_details: editTestDetails,
+          supplier: editSupplier,
+          company,
+        }),
+      });
+      if (!res.ok) { alert(t("errorSaving")); return; }
+      setEditingId(null);
+      loadProducts();
+    } catch { alert(t("errorSaving")); }
   }
 
   return (

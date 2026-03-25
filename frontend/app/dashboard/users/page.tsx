@@ -70,38 +70,41 @@ export default function SettingsPage() {
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!newUsername.trim() || !newPassword.trim()) return;
-    await apiFetch(`/api/users`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username: newUsername.trim(),
-        password: newPassword.trim(),
-        company_access: newCompanyAccess,
-        can_manage_products: newCanManageProducts,
-        can_edit_pending: newCanEditPending,
-        can_delete_pending: newCanDeletePending,
-        can_edit_events: newCanEditEvents,
-        can_delete_events: newCanDeleteEvents,
-        can_set_suggested_action: newCanSetSuggestedAction,
-        can_mark_addressed: newCanMarkAddressed,
-        can_edit_addressed: newCanEditAddressed,
-        can_delete_addressed: newCanDeleteAddressed,
-        can_assign: newCanAssign,
-      }),
-    });
-    setNewUsername("");
-    setNewPassword("");
-    setNewCompanyAccess("All");
-    setNewCanManageProducts(true);
-    setNewCanEditPending(true);
-    setNewCanDeletePending(true);
-    setNewCanEditEvents(true);
-    setNewCanDeleteEvents(true);
-    setNewCanSetSuggestedAction(true);
-    setNewCanMarkAddressed(true);
-    setNewCanEditAddressed(true);
-    setNewCanDeleteAddressed(true);
-    loadUsers();
+    try {
+      const res = await apiFetch(`/api/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: newUsername.trim(),
+          password: newPassword.trim(),
+          company_access: newCompanyAccess,
+          can_manage_products: newCanManageProducts,
+          can_edit_pending: newCanEditPending,
+          can_delete_pending: newCanDeletePending,
+          can_edit_events: newCanEditEvents,
+          can_delete_events: newCanDeleteEvents,
+          can_set_suggested_action: newCanSetSuggestedAction,
+          can_mark_addressed: newCanMarkAddressed,
+          can_edit_addressed: newCanEditAddressed,
+          can_delete_addressed: newCanDeleteAddressed,
+          can_assign: newCanAssign,
+        }),
+      });
+      if (!res.ok) { alert(t("errorSaving")); return; }
+      setNewUsername("");
+      setNewPassword("");
+      setNewCompanyAccess("All");
+      setNewCanManageProducts(true);
+      setNewCanEditPending(true);
+      setNewCanDeletePending(true);
+      setNewCanEditEvents(true);
+      setNewCanDeleteEvents(true);
+      setNewCanSetSuggestedAction(true);
+      setNewCanMarkAddressed(true);
+      setNewCanEditAddressed(true);
+      setNewCanDeleteAddressed(true);
+      loadUsers();
+    } catch { alert(t("errorSaving")); }
   }
 
   // Edit user state
@@ -154,52 +157,73 @@ export default function SettingsPage() {
       can_delete_addressed: editCanDeleteAddressed,
       can_assign: editCanAssign,
     };
-    await apiFetch(`/api/users/${editingUser}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    setEditingUser(null);
-    loadUsers();
+    try {
+      const res = await apiFetch(`/api/users/${editingUser}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) { alert(t("errorSaving")); return; }
+      setEditingUser(null);
+      loadUsers();
+    } catch { alert(t("errorSaving")); }
   }
 
   async function handleDelete(username: string) {
-    await apiFetch(`/api/users/${username}`, { method: "DELETE" });
-    loadUsers();
+    if (!confirm(t("confirmDelete"))) return;
+    try {
+      const res = await apiFetch(`/api/users/${username}`, { method: "DELETE" });
+      if (!res.ok) { alert(t("errorDeleting")); return; }
+      loadUsers();
+    } catch { alert(t("errorDeleting")); }
   }
 
   async function handleAddAction(e: React.FormEvent) {
     e.preventDefault();
     if (!newAction.trim()) return;
-    await apiFetch(`/api/suggested-actions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: newAction.trim() }),
-    });
-    setNewAction("");
-    loadActions();
+    try {
+      const res = await apiFetch(`/api/suggested-actions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: newAction.trim() }),
+      });
+      if (!res.ok) { alert(t("errorSaving")); return; }
+      setNewAction("");
+      loadActions();
+    } catch { alert(t("errorSaving")); }
   }
 
   async function handleDeleteAction(index: number) {
-    await apiFetch(`/api/suggested-actions/${index}`, { method: "DELETE" });
-    loadActions();
+    if (!confirm(t("confirmDelete"))) return;
+    try {
+      const res = await apiFetch(`/api/suggested-actions/${index}`, { method: "DELETE" });
+      if (!res.ok) { alert(t("errorDeleting")); return; }
+      loadActions();
+    } catch { alert(t("errorDeleting")); }
   }
 
   async function handleAddSupplier(e: React.FormEvent) {
     e.preventDefault();
     if (!newSupplier.trim()) return;
-    await apiFetch(`/api/suppliers`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newSupplier.trim() }),
-    });
-    setNewSupplier("");
-    loadSuppliers();
+    try {
+      const res = await apiFetch(`/api/suppliers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newSupplier.trim() }),
+      });
+      if (!res.ok) { alert(t("errorSaving")); return; }
+      setNewSupplier("");
+      loadSuppliers();
+    } catch { alert(t("errorSaving")); }
   }
 
   async function handleDeleteSupplier(index: number) {
-    await apiFetch(`/api/suppliers/${index}`, { method: "DELETE" });
-    loadSuppliers();
+    if (!confirm(t("confirmDelete"))) return;
+    try {
+      const res = await apiFetch(`/api/suppliers/${index}`, { method: "DELETE" });
+      if (!res.ok) { alert(t("errorDeleting")); return; }
+      loadSuppliers();
+    } catch { alert(t("errorDeleting")); }
   }
 
   if (!perms.is_admin) {
@@ -305,7 +329,7 @@ export default function SettingsPage() {
             <div>
               <label className="block text-sm font-medium mb-1">{t("password")}</label>
               <input
-                type="text"
+                type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 className="w-full border rounded px-3 py-2"
@@ -452,7 +476,7 @@ export default function SettingsPage() {
                           className="border rounded px-2 py-1 w-full text-sm"
                         />
                         <input
-                          type="text"
+                          type="password"
                           value={editPassword}
                           onChange={(e) => setEditPassword(e.target.value)}
                           placeholder={t("newPasswordPlaceholder")}

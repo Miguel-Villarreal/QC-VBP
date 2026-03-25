@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n, useAuth, useCompany, Company } from "./i18n";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
+import { API_BASE } from "./api";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -19,7 +18,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     try {
-      const res = await fetch(`${API}/api/auth/login`, {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
