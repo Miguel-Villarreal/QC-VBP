@@ -312,7 +312,8 @@ def create_product(name: str, inspection_level: str, aql_level: str,
             (name, inspection_level, aql_level, test_details, supplier,
              json.dumps(companies), created_by, created_at),
         )
-    return get_product(cur.lastrowid)
+        row_id = cur.lastrowid
+    return get_product(row_id)
 
 
 def update_product(product_id: int, name: str, inspection_level: str, aql_level: str,
@@ -391,7 +392,8 @@ def create_event(product_id: int, product_name: str, direction: str, lot_size: i
              accept_number, reject_number, code_letter, date_inspected,
              json.dumps(companies), created_by, created_at),
         )
-    return get_event(cur.lastrowid)
+        row_id = cur.lastrowid
+    return get_event(row_id)
 
 
 def update_event(event_id: int, product_id: int, product_name: str, direction: str,
@@ -493,7 +495,8 @@ def create_pending(product_id: int, product_name: str, direction: str, lot_size:
             (product_id, product_name, direction, lot_size, suggested_sample_size,
              estimated_date, json.dumps(companies), created_by, assigned_to, created_at),
         )
-    return get_pending(cur.lastrowid)
+        row_id = cur.lastrowid
+    return get_pending(row_id)
 
 
 def update_pending(pending_id: int, product_id: int, product_name: str, direction: str,

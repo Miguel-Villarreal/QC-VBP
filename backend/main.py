@@ -285,7 +285,7 @@ def create_product(product: ProductCreate, _user: str = Depends(auth.require_aut
         name=product.name, inspection_level=product.inspection_level,
         aql_level=product.aql_level, test_details=product.test_details,
         supplier=product.supplier, companies=companies,
-        created_by=product.created_by, created_at=datetime.now().isoformat(),
+        created_by=_user, created_at=datetime.now().isoformat(),
     )
     sheets.sync_products(database.get_all_products())
     return created
@@ -388,7 +388,7 @@ def create_pending(p: PendingInspectionCreate, _user: str = Depends(auth.require
         direction=p.direction, lot_size=p.lot_size,
         suggested_sample_size=aql_result["sample_size"],
         estimated_date=p.estimated_date, companies=companies,
-        created_by=p.created_by, assigned_to=p.assigned_to,
+        created_by=_user, assigned_to=p.assigned_to,
         created_at=datetime.now().isoformat(),
     )
     sheets.sync_pending(database.get_all_pending())
@@ -457,7 +457,7 @@ def create_event(event: EventCreate, _user: str = Depends(auth.require_auth)):
         pass_fail=pass_fail, sample_size=aql_result["sample_size"],
         accept_number=aql_result["accept"], reject_number=aql_result["reject"],
         code_letter=aql_result["code_letter"], date_inspected=event.date_inspected,
-        companies=companies, created_by=event.created_by,
+        companies=companies, created_by=_user,
         created_at=datetime.now().isoformat(),
     )
     if event.pending_id and database.get_pending(event.pending_id):
@@ -516,7 +516,7 @@ def address_event(event_id: int, data: dict, _user: str = Depends(auth.require_a
     updated = database.set_addressed(
         event_id, addressed,
         addressed_date=data.get("addressed_date", "") if addressed else "",
-        addressed_by=data.get("addressed_by", "") if addressed else "",
+        addressed_by=_user if addressed else "",
     )
     sheets.sync_events(database.get_all_events())
     return updated
@@ -537,7 +537,7 @@ def release_event(event_id: int, data: dict, _user: str = Depends(auth.require_a
     updated = database.set_released(
         event_id, released,
         released_date=data.get("released_date", "") if released else "",
-        released_by=data.get("released_by", "") if released else "",
+        released_by=_user if released else "",
     )
     sheets.sync_events(database.get_all_events())
     return updated
