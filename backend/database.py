@@ -40,7 +40,8 @@ def init_db():
                 can_mark_addressed INTEGER DEFAULT 1,
                 can_edit_addressed INTEGER DEFAULT 1,
                 can_delete_addressed INTEGER DEFAULT 1,
-                can_assign INTEGER DEFAULT 1
+                can_assign INTEGER DEFAULT 1,
+                can_manage_users INTEGER DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS products (
@@ -113,6 +114,14 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_products_supplier ON products(supplier);
         """)
 
+        # Migrate: add can_manage_users column if missing
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+        if "can_manage_users" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN can_manage_users INTEGER DEFAULT 0")
+            # Grant can_manage_users to existing admin users
+            conn.execute("UPDATE users SET can_manage_users = 1 WHERE is_admin = 1")
+            conn.commit()
+
         # Seed admin user if no users exist
         row = conn.execute("SELECT COUNT(*) FROM users").fetchone()
         if row[0] == 0:
@@ -121,8 +130,9 @@ def init_db():
                     """INSERT INTO users (username, password_hash, is_admin, company_access,
                        can_manage_products, can_edit_pending, can_delete_pending,
                        can_edit_events, can_delete_events, can_set_suggested_action,
-                       can_mark_addressed, can_edit_addressed, can_delete_addressed, can_assign)
-                       VALUES (?, ?, 1, 'All', 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)""",
+                       can_mark_addressed, can_edit_addressed, can_delete_addressed, can_assign,
+                       can_manage_users)
+                       VALUES (?, ?, 1, 'All', 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)""",
                     ("user", auth.hash_password("password")),
                 )
 
@@ -145,6 +155,7 @@ def _row_to_user(row: sqlite3.Row) -> dict:
         "can_edit_addressed": bool(row["can_edit_addressed"]),
         "can_delete_addressed": bool(row["can_delete_addressed"]),
         "can_assign": bool(row["can_assign"]),
+        "can_manage_users": bool(row["can_manage_users"]),
     }
 
 
@@ -227,8 +238,9 @@ def create_user(username: str, password: str, is_admin: bool = False, **perms) -
             """INSERT INTO users (username, password_hash, is_admin, company_access,
                can_manage_products, can_edit_pending, can_delete_pending,
                can_edit_events, can_delete_events, can_set_suggested_action,
-               can_mark_addressed, can_edit_addressed, can_delete_addressed, can_assign)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               can_mark_addressed, can_edit_addressed, can_delete_addressed, can_assign,
+               can_manage_users)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 username, auth.hash_password(password), int(is_admin),
                 perms.get("company_access", "All"),
@@ -242,6 +254,7 @@ def create_user(username: str, password: str, is_admin: bool = False, **perms) -
                 int(perms.get("can_edit_addressed", True)),
                 int(perms.get("can_delete_addressed", True)),
                 int(perms.get("can_assign", True)),
+                int(perms.get("can_manage_users", False)),
             ),
         )
     return get_user(username)
@@ -263,7 +276,8 @@ def update_user(username: str, new_username: str | None = None, new_password: st
         values.append(auth.hash_password(new_password))
     for field in ("company_access", "can_manage_products", "can_edit_pending", "can_delete_pending",
                   "can_edit_events", "can_delete_events", "can_set_suggested_action",
-                  "can_mark_addressed", "can_edit_addressed", "can_delete_addressed", "can_assign"):
+                  "can_mark_addressed", "can_edit_addressed", "can_delete_addressed", "can_assign",
+                  "can_manage_users"):
         if field in perms:
             updates.append(f"{field} = ?")
             values.append(int(perms[field]) if isinstance(perms[field], bool) else perms[field])

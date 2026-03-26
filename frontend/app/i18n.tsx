@@ -135,6 +135,7 @@ const translations = {
   canEditAddressed: { en: "Edit Addressed", es: "Editar Atendidos" },
   canDeleteAddressed: { en: "Delete Addressed", es: "Eliminar Atendidos" },
   canAssign: { en: "Assign Users", es: "Asignar Usuarios" },
+  canManageUsers: { en: "Manage Users", es: "Gestionar Usuarios" },
 
   // Pagination
   page: { en: "Page", es: "Pagina" },
@@ -271,6 +272,7 @@ export interface UserPermissions {
   can_edit_addressed: boolean;
   can_delete_addressed: boolean;
   can_assign: boolean;
+  can_manage_users: boolean;
 }
 
 const defaultPerms: UserPermissions = {
@@ -287,6 +289,7 @@ const defaultPerms: UserPermissions = {
   can_edit_addressed: false,
   can_delete_addressed: false,
   can_assign: false,
+  can_manage_users: false,
 };
 
 interface AuthContextType {

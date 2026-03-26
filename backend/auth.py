@@ -61,3 +61,12 @@ def require_admin(request: Request) -> str:
     if not user or not user["is_admin"]:
         raise HTTPException(status_code=403, detail="Admin access required")
     return username
+
+
+def require_user_manager(request: Request) -> str:
+    username = require_auth(request)
+    import database
+    user = database.get_user(username)
+    if not user or not (user["is_admin"] or user["can_manage_users"]):
+        raise HTTPException(status_code=403, detail="User management access required")
+    return username

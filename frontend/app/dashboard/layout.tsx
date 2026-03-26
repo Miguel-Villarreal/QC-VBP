@@ -21,7 +21,7 @@ export default function DashboardLayout({
   const navItems = [
     { href: "/dashboard/products", label: t("masterList") },
     { href: "/dashboard/events", label: t("events") },
-    ...(perms.is_admin ? [{ href: "/dashboard/users", label: t("settings") }] : []),
+    ...((perms.is_admin || perms.can_manage_users) ? [{ href: "/dashboard/users", label: t("settings") }] : []),
   ];
 
   useEffect(() => {

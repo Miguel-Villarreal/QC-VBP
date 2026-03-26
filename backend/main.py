@@ -71,6 +71,7 @@ class UserCreate(BaseModel):
     can_edit_addressed: bool = True
     can_delete_addressed: bool = True
     can_assign: bool = True
+    can_manage_users: bool = False
 
 class UserUpdate(BaseModel):
     new_username: str | None = None
@@ -86,6 +87,7 @@ class UserUpdate(BaseModel):
     can_edit_addressed: bool | None = None
     can_delete_addressed: bool | None = None
     can_assign: bool | None = None
+    can_manage_users: bool | None = None
 
 class ProductCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
@@ -177,6 +179,7 @@ def login(data: LoginRequest, request: Request):
             "can_edit_addressed": u["can_edit_addressed"],
             "can_delete_addressed": u["can_delete_addressed"],
             "can_assign": u["can_assign"],
+            "can_manage_users": u["can_manage_users"],
         }
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -184,14 +187,14 @@ def login(data: LoginRequest, request: Request):
 # --- Protected routes (require JWT) ---
 
 @app.get("/api/users")
-def list_users(_user: str = Depends(auth.require_admin)):
+def list_users(_user: str = Depends(auth.require_user_manager)):
     return [
         {k: v for k, v in u.items() if k != "password_hash"}
         for u in database.list_users()
     ]
 
 @app.post("/api/users")
-def create_user(user: UserCreate, _user: str = Depends(auth.require_admin)):
+def create_user(user: UserCreate, _user: str = Depends(auth.require_user_manager)):
     if database.get_user(user.username):
         raise HTTPException(status_code=400, detail="Username already exists")
     created = database.create_user(
@@ -207,11 +210,12 @@ def create_user(user: UserCreate, _user: str = Depends(auth.require_admin)):
         can_edit_addressed=user.can_edit_addressed,
         can_delete_addressed=user.can_delete_addressed,
         can_assign=user.can_assign,
+        can_manage_users=user.can_manage_users,
     )
     return {k: v for k, v in created.items() if k != "password_hash"}
 
 @app.patch("/api/users/{username}")
-def update_user(username: str, body: UserUpdate, _user: str = Depends(auth.require_admin)):
+def update_user(username: str, body: UserUpdate, _user: str = Depends(auth.require_user_manager)):
     u = database.get_user(username)
     if not u:
         raise HTTPException(status_code=404, detail="User not found")
@@ -222,7 +226,7 @@ def update_user(username: str, body: UserUpdate, _user: str = Depends(auth.requi
     return {k: v for k, v in updated.items() if k != "password_hash"}
 
 @app.delete("/api/users/{username}")
-def delete_user(username: str, _user: str = Depends(auth.require_admin)):
+def delete_user(username: str, _user: str = Depends(auth.require_user_manager)):
     u = database.get_user(username)
     if not u:
         raise HTTPException(status_code=404, detail="User not found")
@@ -239,7 +243,7 @@ def list_suggested_actions(_user: str = Depends(auth.require_auth)):
     return database.list_suggested_actions()
 
 @app.post("/api/suggested-actions")
-def add_suggested_action(data: dict, _user: str = Depends(auth.require_admin)):
+def add_suggested_action(data: dict, _user: str = Depends(auth.require_user_manager)):
     action = data.get("action", "").strip()
     if not action:
         raise HTTPException(status_code=400, detail="Action text is required")
@@ -252,7 +256,7 @@ def add_suggested_action(data: dict, _user: str = Depends(auth.require_admin)):
     return result
 
 @app.delete("/api/suggested-actions/{index}")
-def delete_suggested_action(index: int, _user: str = Depends(auth.require_admin)):
+def delete_suggested_action(index: int, _user: str = Depends(auth.require_user_manager)):
     removed = database.delete_suggested_action_by_index(index)
     if removed is None:
         raise HTTPException(status_code=404, detail="Action not found")
@@ -268,7 +272,7 @@ def list_suppliers(_user: str = Depends(auth.require_auth)):
     return database.list_suppliers()
 
 @app.post("/api/suppliers")
-def add_supplier(data: dict, _user: str = Depends(auth.require_admin)):
+def add_supplier(data: dict, _user: str = Depends(auth.require_user_manager)):
     name = data.get("name", "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Supplier name is required")
@@ -281,7 +285,7 @@ def add_supplier(data: dict, _user: str = Depends(auth.require_admin)):
     return result
 
 @app.delete("/api/suppliers/{index}")
-def delete_supplier(index: int, _user: str = Depends(auth.require_admin)):
+def delete_supplier(index: int, _user: str = Depends(auth.require_user_manager)):
     removed = database.delete_supplier_by_index(index)
     if removed is None:
         raise HTTPException(status_code=404, detail="Supplier not found")

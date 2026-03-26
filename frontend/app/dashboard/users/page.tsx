@@ -18,6 +18,7 @@ interface User {
   can_edit_addressed: boolean;
   can_delete_addressed: boolean;
   can_assign: boolean;
+  can_manage_users: boolean;
 }
 
 export default function SettingsPage() {
@@ -37,6 +38,7 @@ export default function SettingsPage() {
   const [newCanEditAddressed, setNewCanEditAddressed] = useState(true);
   const [newCanDeleteAddressed, setNewCanDeleteAddressed] = useState(true);
   const [newCanAssign, setNewCanAssign] = useState(true);
+  const [newCanManageUsers, setNewCanManageUsers] = useState(false);
 
   // Suggested Actions state
   const [actionsList, setActionsList] = useState<string[]>([]);
@@ -88,6 +90,7 @@ export default function SettingsPage() {
           can_edit_addressed: newCanEditAddressed,
           can_delete_addressed: newCanDeleteAddressed,
           can_assign: newCanAssign,
+          can_manage_users: newCanManageUsers,
         }),
       });
       if (!res.ok) { alert(t("errorSaving")); return; }
@@ -103,6 +106,7 @@ export default function SettingsPage() {
       setNewCanMarkAddressed(true);
       setNewCanEditAddressed(true);
       setNewCanDeleteAddressed(true);
+      setNewCanManageUsers(false);
       loadUsers();
     } catch { alert(t("errorSaving")); }
   }
@@ -122,6 +126,7 @@ export default function SettingsPage() {
   const [editCanEditAddressed, setEditCanEditAddressed] = useState(true);
   const [editCanDeleteAddressed, setEditCanDeleteAddressed] = useState(true);
   const [editCanAssign, setEditCanAssign] = useState(true);
+  const [editCanManageUsers, setEditCanManageUsers] = useState(false);
 
   function startEdit(u: User) {
     setEditingUser(u.username);
@@ -138,6 +143,7 @@ export default function SettingsPage() {
     setEditCanEditAddressed(u.can_edit_addressed);
     setEditCanDeleteAddressed(u.can_delete_addressed);
     setEditCanAssign(u.can_assign);
+    setEditCanManageUsers(u.can_manage_users);
   }
 
   async function handleSaveEdit() {
@@ -156,6 +162,7 @@ export default function SettingsPage() {
       can_edit_addressed: editCanEditAddressed,
       can_delete_addressed: editCanDeleteAddressed,
       can_assign: editCanAssign,
+      can_manage_users: editCanManageUsers,
     };
     try {
       const res = await apiFetch(`/api/users/${editingUser}`, {
@@ -226,7 +233,7 @@ export default function SettingsPage() {
     } catch { alert(t("errorDeleting")); }
   }
 
-  if (!perms.is_admin) {
+  if (!perms.is_admin && !perms.can_manage_users) {
     return <p className="text-gray-500">Access denied.</p>;
   }
 
@@ -432,6 +439,14 @@ export default function SettingsPage() {
               />
               {t("canAssign")}
             </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={newCanManageUsers}
+                onChange={(e) => setNewCanManageUsers(e.target.checked)}
+              />
+              {t("canManageUsers")}
+            </label>
           </div>
 
           <button
@@ -461,6 +476,7 @@ export default function SettingsPage() {
                   <th className="text-left px-3 py-2">{t("canEditAddressed")}</th>
                   <th className="text-left px-3 py-2">{t("canDeleteAddressed")}</th>
                   <th className="text-left px-3 py-2">{t("canAssign")}</th>
+                  <th className="text-left px-3 py-2">{t("canManageUsers")}</th>
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
@@ -504,6 +520,7 @@ export default function SettingsPage() {
                       <td className="px-3 py-2"><input type="checkbox" checked={editCanEditAddressed} onChange={(e) => setEditCanEditAddressed(e.target.checked)} /></td>
                       <td className="px-3 py-2"><input type="checkbox" checked={editCanDeleteAddressed} onChange={(e) => setEditCanDeleteAddressed(e.target.checked)} /></td>
                       <td className="px-3 py-2"><input type="checkbox" checked={editCanAssign} onChange={(e) => setEditCanAssign(e.target.checked)} /></td>
+                      <td className="px-3 py-2"><input type="checkbox" checked={editCanManageUsers} onChange={(e) => setEditCanManageUsers(e.target.checked)} /></td>
                       <td className="px-3 py-2 text-right space-x-2">
                         <button onClick={handleSaveEdit} className="text-green-600 hover:text-green-800 text-sm">{t("save")}</button>
                         <button onClick={() => setEditingUser(null)} className="text-gray-600 hover:text-gray-800 text-sm">{t("cancel")}</button>
@@ -530,6 +547,7 @@ export default function SettingsPage() {
                       <td className="px-3 py-2">{u.can_edit_addressed ? t("yes") : t("no")}</td>
                       <td className="px-3 py-2">{u.can_delete_addressed ? t("yes") : t("no")}</td>
                       <td className="px-3 py-2">{u.can_assign ? t("yes") : t("no")}</td>
+                      <td className="px-3 py-2">{u.can_manage_users ? t("yes") : t("no")}</td>
                       <td className="px-3 py-2 text-right space-x-2">
                         <button onClick={() => startEdit(u)} className="text-blue-600 hover:text-blue-800 text-sm">{t("edit")}</button>
                         {!u.is_admin && (
