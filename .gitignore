@@ -21,3 +21,23 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Secrets / credentials -- NEVER commit
+backend/credentials/
+*.service_account.json
+
+# Database (lives on Fly.io volume; local copy is dev-only)
+backend/data/*.db
+backend/data/*.db-shm
+backend/data/*.db-wal
+
+# Backups and uploads (contain real data)
+backups/
+backend/uploads/
+
+# Local Claude settings
+.claude/settings.local.json
+
+# Build artifacts / junk
+frontend/tsconfig.tsbuildinfo
+nul
