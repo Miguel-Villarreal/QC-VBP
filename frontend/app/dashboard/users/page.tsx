@@ -48,6 +48,10 @@ export default function SettingsPage() {
   const [suppliersList, setSuppliersList] = useState<string[]>([]);
   const [newSupplier, setNewSupplier] = useState("");
 
+  // Google Sheets sync state
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
+
   const loadUsers = useCallback(async () => {
     const res = await apiFetch(`/api/users`);
     setUserList(await res.json());
@@ -233,6 +237,19 @@ export default function SettingsPage() {
     } catch { alert(t("errorDeleting")); }
   }
 
+  async function handleSyncSheets() {
+    setSyncing(true);
+    setSyncMsg("");
+    try {
+      const res = await apiFetch(`/api/sheets/sync-all`, { method: "POST" });
+      setSyncMsg(res.ok ? t("syncSuccess") : t("syncError"));
+    } catch {
+      setSyncMsg(t("syncError"));
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   if (!perms.is_admin && !perms.can_manage_users) {
     return <p className="text-gray-500">Access denied.</p>;
   }
@@ -240,6 +257,22 @@ export default function SettingsPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-8">
       <h2 className="text-xl font-bold">{t("settings")}</h2>
+
+      {/* --- Google Sheets Sync --- */}
+      <div className="bg-white shadow rounded-lg p-6">
+        <h3 className="text-lg font-semibold mb-2">{t("googleSheets")}</h3>
+        <p className="text-sm text-gray-500 mb-4">{t("syncDescription")}</p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSyncSheets}
+            disabled={syncing}
+            className="bg-green-600 text-white px-4 py-2 rounded font-medium hover:bg-green-700 disabled:opacity-50"
+          >
+            {syncing ? t("syncing") : t("syncNow")}
+          </button>
+          {syncMsg && <span className="text-sm">{syncMsg}</span>}
+        </div>
+      </div>
 
       {/* --- Suggested Actions Management --- */}
       <div className="bg-white shadow rounded-lg p-6">

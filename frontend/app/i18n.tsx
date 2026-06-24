@@ -122,6 +122,17 @@ const translations = {
   selectAction: { en: "-- Select --", es: "-- Seleccionar --" },
   none: { en: "None", es: "Ninguna" },
 
+  // Google Sheets sync
+  googleSheets: { en: "Google Sheets", es: "Google Sheets" },
+  syncNow: { en: "Sync Now", es: "Sincronizar Ahora" },
+  syncing: { en: "Syncing...", es: "Sincronizando..." },
+  syncDescription: {
+    en: "Overwrite all sheet tabs with the latest data from the database. Use this to refresh tabs that haven't changed recently.",
+    es: "Sobrescribe todas las pestanas de la hoja con los datos mas recientes de la base de datos. Usalo para actualizar pestanas que no han cambiado recientemente.",
+  },
+  syncSuccess: { en: "All tabs synced successfully.", es: "Todas las pestanas se sincronizaron correctamente." },
+  syncError: { en: "Sync failed. Please try again.", es: "La sincronizacion fallo. Intenta de nuevo." },
+
   // Failed Events & Addressed Fails
   failedEvents: { en: "Failed Events", es: "Eventos Fallidos" },
   awaitingFix: { en: "Awaiting Fix", es: "Pendiente de Correccion" },

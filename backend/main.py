@@ -884,6 +884,22 @@ def sheets_connect(_user: str = Depends(auth.require_auth)):
     sheets.ensure_connected()
     return sheets.get_status()
 
+@app.post("/api/sheets/sync-all")
+def sheets_sync_all(_user: str = Depends(auth.require_user_manager)):
+    """Full re-sync: overwrite all 8 tabs from the database (the source of truth)."""
+    if not sheets.CREDENTIALS_PATH.exists():
+        raise HTTPException(status_code=503, detail="Google Sheets credentials not found on server")
+    try:
+        sheets.ensure_connected()
+        sheets.sync_products(database.get_all_products())
+        sheets.sync_pending(database.get_all_pending())
+        sheets.sync_events(database.get_all_events())
+        sheets.sync_suggested_actions(database.list_suggested_actions())
+        sheets.sync_suppliers(database.list_suppliers())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Sync failed: {e}")
+    return sheets.get_status()
+
 
 # --- Static file serving (for Docker: serves Next.js exported site) ---
 
